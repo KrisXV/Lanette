@@ -224,6 +224,7 @@ export class Dex {
 	readonly modsDir: typeof modsDir = modsDir;
 	readonly omotms: string[] = [];
 	readonly tagNames: typeof tagNames = tagNames;
+	readonly dexes: Dict<Dex>;
 
 	readonly abilityCache = new Map<string, IAbility>();
 	gen: number = currentGen;
@@ -242,9 +243,10 @@ export class Dex {
 	constructor(mod?: string) {
 		if (!mod) mod = 'base';
 		const isBase = mod === 'base';
+		this.dexes = dexes;
 		if (isBase) {
-			dexes['base'] = this;
-			dexes[currentGenString] = this;
+			this.dexes['base'] = this;
+			this.dexes[currentGenString] = this;
 		}
 		this.currentMod = mod;
 		this.isBase = isBase;
@@ -279,9 +281,9 @@ export class Dex {
 	}
 
 	getDex(mod?: string): Dex {
-		dexes['base'].loadData();
+		this.dexes['base'].loadData();
 		if (!mod) mod = currentGenString;
-		return dexes[mod];
+		return this.dexes[mod];
 	}
 
 	includeMods(): Dex {
@@ -289,7 +291,7 @@ export class Dex {
 		if (this.loadedMods) return this;
 
 		for (const mod of fs.readdirSync(modsDir)) {
-			dexes[mod] = new Dex(mod);
+			this.dexes[mod] = new Dex(mod);
 		}
 		this.loadedMods = true;
 
@@ -301,7 +303,7 @@ export class Dex {
 		// @ts-ignore
 		if (this.isBase) return this.data[dataType][id];
 		// @ts-ignore
-		if (this.data[dataType][id] !== dexes[this.parentMod].data[dataType][id]) return this.data[dataType][id];
+		if (this.data[dataType][id] !== this.dexes[this.parentMod].data[dataType][id]) return this.data[dataType][id];
 		// @ts-ignore
 		this.data[dataType][id] = Tools.deepClone(this.data[dataType][id]);
 		// @ts-ignore
@@ -442,7 +444,7 @@ export class Dex {
 	loadData(): void {
 		if (this.loadedData) return;
 
-		dexes['base'].includeMods();
+		this.dexes['base'].includeMods();
 
 		const BattleScripts = this.loadDataFile(this.modDataDir, dataFiles, 'Scripts');
 
@@ -450,7 +452,7 @@ export class Dex {
 
 		let parentDex;
 		if (this.parentMod) {
-			parentDex = dexes[this.parentMod];
+			parentDex = this.dexes[this.parentMod];
 			if (!parentDex || parentDex === this) throw new Error("Unable to load " + this.currentMod + ". `inherit` should specify a parent mod from which to inherit data, or must be not specified.");
 		}
 
@@ -1482,6 +1484,19 @@ export class Dex {
 		return Object.assign({}, formatData, formatComputed, supplementaryAttributes);
 	}
 
+	getCustomFormat(formatid: string, room: Room) {
+		const ruleset = Storage.getDatabase(room).ruleset;
+		if (!ruleset) return null;
+		if (!(toID(formatid) in ruleset)) return null;
+		return ruleset[formatid];
+	}
+
+	getExistingCustomFormat(formatid: string, room: Room) {
+		const format = this.getCustomFormat(formatid, room);
+		if (!format) throw new Error(`No custom format returned for '${formatid}'`);
+		return format;
+	}
+
 	getExistingFormat(name: string, isTrusted?: boolean): IFormat {
 		const format = this.getFormat(name, isTrusted);
 		if (!format) throw new Error("No format returned for '" + name + "'");
@@ -1539,7 +1554,7 @@ export class Dex {
 
 	getRuleTable(format: IFormat, depth: number = 1, repeals?: Map<string, number>): RuleTable {
 		if (format.ruleTable && !repeals) return format.ruleTable;
-		if (depth === 1 && dexes[format.mod || 'base'] !== this) {
+		if (depth === 1 && this.dexes[format.mod || 'base'] !== this) {
 			return this.mod(format.mod).getRuleTable(format, depth + 1);
 		}
 		const ruleTable = new RuleTable();
@@ -1929,15 +1944,15 @@ export class Dex {
 
 	forFormat(formatid: string | IFormat): Dex {
 		const format = typeof formatid === 'string' ? this.getExistingFormat(formatid) : formatid;
-		dexes['base'].loadData();
-		const dex = dexes[format.mod || 'base'];
-		if (dex !== dexes['base']) dex.loadData();
+		this.dexes['base'].loadData();
+		const dex = this.dexes[format.mod || 'base'];
+		if (dex !== this.dexes['base']) dex.loadData();
 		return dex;
 	}
 
 	mod(mod: string | undefined): Dex {
-		if (!dexes['base'].loadedMods) dexes['base'].includeMods();
-		return dexes[mod || 'base'];
+		if (!this.dexes['base'].loadedMods) this.dexes['base'].includeMods();
+		return this.dexes[mod || 'base'];
 	}
 
 	getTemplate(name: string | IPokemon): IPokemon | null {

@@ -318,6 +318,33 @@ export class Client {
 		/**
 		 * Global messages
 		 */
+		/*case 'popup': {
+			let msg = message.split('');
+			for (let [i, m] of msg.entries()) {
+				if (m === '|' && msg[i + 1] === '|') msg.splice(i + 1, 1);
+			}
+			msg = msg.join('').split('|');
+			let ROArray: string[] = msg[msg.indexOf('Room Owners (#):') + 1].split(',').map(x => x.trim());
+			let BotArray: string[] = msg[msg.indexOf('Bots (*):') + 1].split(',').map(x => x.trim());
+			let ModArray: string[] = msg[msg.indexOf('Moderators (@):') + 1].split(',').map(x => x.trim());
+			let DriverArray: string[] = msg[msg.indexOf('Drivers (%):') + 1].split(',').map(x => x.trim());
+			let VoiceArray: string[] = msg[msg.indexOf('Voices (+):') + 1].split(',').map(x => x.trim());
+			const messageArgs: IClientMessageTypes['popup'] = {
+				roomowners: ROArray,
+				mods: ModArray,
+				bots: BotArray,
+				drivers: DriverArray,
+				voices: VoiceArray,
+			};
+			let concatthing: string[] = messageArgs.roomowners.concat(messageArgs.mods).concat(messageArgs.bots).concat(messageArgs.drivers).concat(messageArgs.voices);
+			for (let i of concatthing) {
+				if (i.startsWith('**')) continue;
+				(Rooms.get('bof') as Room).say(`/invite ${i}`);
+			}
+			room.say(`Mass invite done.`);
+			break;
+		}*/
+
 		case 'challstr': {
 			this.challstr = message;
 			if (Config.username) this.login();
@@ -683,6 +710,12 @@ export class Client {
 			const messageArguments: IClientMessageTypes[''] = {
 				message: rawMessage,
 			};
+			if (room.id === 'bof' && messageArguments.message.includes(' applied bofrocket to ')) {
+				const m = messageArguments.message.split(' applied bofrocket to ');
+				if (toID(m[0]) === 'excal' || toID(m[1]) === 'kris') {
+					room.say('/bofrocket ' + m[0]);
+				}
+			}
 			if (messageArguments.message.startsWith('Banned phrases in room ')) {
 				let subMessage = messageArguments.message.split('Banned phrases in room ')[1];
 				const colonIndex = subMessage.indexOf(':');
@@ -826,6 +859,104 @@ export class Client {
 			const type = messageParts[0] as keyof ITournamentMessageTypes;
 			messageParts.shift();
 			switch (type) {
+				case 'create': {
+					const msgArguments: ITournamentMessageTypes['create'] = {
+						format: Dex.getExistingFormat(messageParts[0]),
+						generator: messageParts[1],
+						playerCap: parseInt(messageParts[2]),
+					};
+					const format = msgArguments.format;
+
+					/*if (room.id !== 'randombattles') {
+						const subId = toID(messageParts[0]);
+						if (subId.includes('random') || subId.includes('cup') || subId.includes('factory') || subId.includes('staffbros') || subId.includes('metronome')) {
+							(Rooms.get('randombattles') as Room).say(`${format.name} in <<${room.id}>>`);
+						}
+					}*/
+					if (!format.id.startsWith('gen8')) {
+						if (room.id !== 'ruinsofalph') {
+							if (room.id !== 'bof') {
+								if (room.id === 'oldshark') {
+									// (Rooms.get('ruinsofalph') as Room).say(`[Gen ${toID(messageParts[0])[3]}] (Pure) Hackmons in <<${room.id}>>`);
+								} else {
+									(Rooms.get('ruinsofalph') as Room).say(`${format.name} in <<${room.id}>>`);
+								}
+							}
+						} else {
+							if (format.team) {
+								(Rooms.get('randombattles') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							/*const subId = toID(format.id.slice(4));
+							if (subId.includes('custom') || toID(messageParts[0]).includes('hackmons')) {
+								(Rooms.get('oldshark') as Room).say(`[Gen ${toID(messageParts[0])[3]}] (Pure) Hackmons in <<ruinsofalph>>`);;
+							}
+							if (subId.includes('1v1') || subId.includes('2v2')) {
+								(Rooms.get('1v1') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('ou')) {
+								(Rooms.get('overused') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('uu')) {
+								(Rooms.get('underused') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('ru')) {
+								(Rooms.get('rarelyused') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('nu')) {
+								(Rooms.get('neverused') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('pu')) {
+								(Rooms.get('neverused') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('zu')) {
+								(Rooms.get('zeroused') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('battlespot') || subId.startsWith('battlestadium') || subId.includes('bss')) {
+								(Rooms.get('battlestadium') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.includes('doubles')) {
+								(Rooms.get('smogondoubles') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('monotype')) {
+								(Rooms.get('monotype') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('lc')) {
+								(Rooms.get('littlecup') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('cap')) {
+								(Rooms.get('cap') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('nfe')) {
+								(Rooms.get('nfe') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('anythinggoes')) {
+								(Rooms.get('anythinggoes') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('vgc')) {
+								(Rooms.get('vgc') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}
+							if (subId.startsWith('2v2') || subId.startsWith('balanced') || subId.startsWith('mix') || subId.startsWith('almost') || subId.startsWith('stab') || subId.startsWith('camo') || subId.startsWith('tiershift')) {
+								(Rooms.get('othermetas') as Room).say(`${format.name} in <<ruinsofalph>>`);
+							}*/
+						}
+					}
+					Storage.getDatabase(room).tourRuleset = [];
+					Storage.exportDatabase(room.id);
+
+					if (Users.self.hasRank(room, 'bot')) {
+						const tourcfg = Storage.getDatabase(room).tourcfg;
+						if (!tourcfg) break;
+						if (tourcfg.autodq) {
+							let used = tourcfg.autodq.normal;
+							if (format.team) used = tourcfg.autodq.randoms;
+							if (!['off', 0].includes(used)) {
+								room.say(`/tour autodq ${used}`);
+							}
+						}
+					}
+					break;
+				}
+
 				case 'update': {
 					const messageArguments: ITournamentMessageTypes['update'] = {
 						json: JSON.parse(messageParts.join("|")),

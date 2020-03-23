@@ -52,7 +52,17 @@ export class User {
 		return !(status === 'busy' || status === 'idle' || status === 'away');
 	}
 
-	say(message: string, dontPrepare?: boolean, dontCheckFilter?: boolean): void {
+	canPerform(room: Room, targetRank = 'roomowner' as GroupName) {
+		return this.hasRank(room, targetRank) || this.isDeveloper();
+	}
+
+	isHost(room: Room): boolean {
+		const hosts = Storage.getDatabase(room).hosts;
+		if (hosts) return hosts.includes(this.id);
+		return false;
+	}
+
+	say(message: string, dontPrepare?: boolean, dontCheckFilter?: boolean) {
 		if (!dontPrepare) message = Tools.prepareMessage(message);
 		if (!dontCheckFilter && Client.willBeFiltered(message)) return;
 		Client.send("|/pm " + this.name + ", " + message);
@@ -137,7 +147,6 @@ export class Users {
 		user.id = id;
 		this.users[id] = user;
 		user.rooms.forEach((value, room) => {
-			if (room.game) room.game.renamePlayer(user, oldId);
 			if (room.tournament) room.tournament.renamePlayer(user, oldId);
 		});
 		return user;

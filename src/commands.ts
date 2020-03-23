@@ -1,9 +1,11 @@
 // eslint-disable-next-line @typescript-eslint/camelcase
 import child_process = require('child_process');
 import fs = require('fs');
+import https = require('https');
 import path = require('path');
 
 import { ICommandDefinition } from "./command-parser";
+import { commandCharacter } from './config';
 import { Player } from "./room-activity";
 import { Game } from './room-game';
 import { IBattleData } from './room-tournament';
@@ -21,14 +23,865 @@ const AWARDED_BOT_GREETING_DURATION = 60 * 24 * 60 * 60 * 1000;
 
 let reloadInProgress = false;
 
-/* eslint-disable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
+const ALL_TIERS = ['AG', 'Uber', 'OU', 'UUBL', 'UU', 'RUBL', 'RU', 'NUBL', 'NU', 'PUBL', 'PU', 'ZU', 'NFE', 'LC Uber', 'LC', 'CAP', 'CAP NFE', 'CAP LC', 'DUber', 'DOU', 'DBL', 'DUU', 'DNU', 'Mega', 'All Pokemon', 'All Abilities', 'All Items', 'All Moves'].map(toID);
 
+/* eslint-disable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
 const commands: Dict<ICommandDefinition> = {
+	shockedlapras: {
+		command(target, room, user) {
+			if (this.isPm(room) || !user.canPerform(room, 'roomowner')) return;
+			this.sayUhtml(``, `<img src="https://cdn.discordapp.com/emojis/528403513894502440.png?v=1" alt="shockedlapras" width="20" height="20" />`, room);
+			return;
+		},
+		aliases: ['sl'],
+	},
+	tourconfig: {
+		command(target, room, user) {
+			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'moderator')) return;
+			if (!target) return this.say(`${commandCharacter}econfig autostart/autodq`);
+			target = target.trim();
+			const args = target.split(' ');
+			if (!Storage.getDatabase(room).tourcfg) {
+				Storage.databases[room.id].tourcfg = {
+					autodq: {
+						randoms: 2,
+						normal: 3,
+					},
+					autostart: 3,
+				};
+				Storage.exportDatabase(room.id);
+			}
+			const db = Storage.getDatabase(room).tourcfg;
+			switch (toID(args[0])) {
+			case 'reset':
+				Storage.databases[room.id].tourcfg = {
+					autodq: {
+						randoms: 2,
+						normal: 3,
+					},
+					autostart: 3,
+				};
+				Storage.exportDatabase(room.id);
+				this.say("``eliminationtour`` configuration reset.");
+				return;
+			case 'autodq':
+			case 'setautodq':
+			case 'adq':
+				if (
+					!args[1] ||
+					!args[2] ||
+					!['randoms', 'normal'].includes(toID(args[1]))
+				) {
+					return this.say(`Correct syntax: ${commandCharacter}econfig autodq randoms/normal __[number | "off"]__`);
+				}
+				const arg2ID = toID(args[2]);
+				const arg2Int = parseFloat(arg2ID);
+				if (toID(args[1]) === 'randoms') {
+					if (arg2ID !== 'off' && isNaN(arg2Int)) {
+						return this.say(`${args[2]} must either be an integer or "off".`);
+					}
+					if (arg2ID === 'off' || arg2Int === 0) {
+						db!.autodq.randoms = 'off';
+						Storage.exportDatabase(room.id);
+						return this.say(`Autodq timer for random formats successfully turned off.`);
+					}
+					db!.autodq.randoms = arg2Int;
+					Storage.exportDatabase(room.id);
+					return this.say(`Autodq timer for random formats successfully set to ${arg2Int} minutes.`);
+				}
+				if (arg2ID !== 'off' && isNaN(arg2Int)) {
+					return this.say(`${args[2]} must either be an integer or "off".`);
+				}
+				if (arg2ID === 'off' || arg2Int === 0) {
+					db!.autodq.normal = 'off';
+					Storage.exportDatabase(room.id);
+					return this.say(`Autodq timer for non-random formats successfully turned off.`);
+				}
+				db!.autodq.normal = arg2Int;
+				Storage.exportDatabase(room.id);
+				return this.say(`Autodq timer for non-random formats successfully set to ${arg2Int} minutes.`);
+			case 'autostart':
+			case 'setautostart':
+			case 'as':
+				if (!args[1]) {
+					return this.say(`Correct syntax: ${commandCharacter}econfig autostart __[number/"off"]__`);
+				}
+				const arg1ID = toID(args[1]);
+				const arg1Int = parseInt(arg1ID);
+				if (arg1ID !== 'off' && isNaN(arg1Int)) return this.say(`${args[2]} must either be a number or "off".`);
+				if (arg1ID === 'off' || arg1Int === 0) {
+					db!.autostart = "off";
+					Storage.exportDatabase(room.id);
+					return this.say(`Autostart successfully turned off.`);
+				}
+				db!.autostart = arg1Int;
+				Storage.exportDatabase(room.id);
+				return this.say(`Autostart successfully set to ${arg1Int}.`);
+			default:
+		return this.say(`Correct syntax: ${commandCharacter}econfig autostart/autodq`);
+			}
+		},
+		aliases: ['econfig'],
+	},
+	/**
+	 * Sample team commands
+	 */
+	addsample: {
+		command(target, room, user) {
+			if (this.isPm(room)) return this.say(`This can only be used in rooms.`);
+			if (!user.canPerform(room, 'driver')) return;
+			if (!target) return this.say(`Correct Syntax: ${commandCharacter}addsample __[tier]__, __[link]__`);
+			target = target.trim();
+			const args = target.split(',');
+			const db = Storage.getDatabase(room);
+			if (!db.samples) {
+				db.samples = {};
+				Storage.exportDatabase(room.id);
+			}
+			if (!args[0]) return this.say(`Correct syntax: ${commandCharacter}addsample __[tier]__, __[;ink]__`);
+			const arg0ID = toID(args[0]);
+			if (!args[1]) return this.say(`Correct syntax: ${commandCharacter}addsample __[tier]__, __[;ink]__`);
+			if (!args[1].trim().startsWith('http')) return this.say("Please provide a valid link.");
+			if (!(arg0ID in db.samples)) {
+				db.samples[arg0ID] = [];
+				Storage.exportDatabase(room.id);
+				this.say(`Sample team storage for ${args[0].trim()} created.`);
+			}
+			const index = db.samples[arg0ID].findIndex(tier => toID(tier) === toID(args[1]));
+			if (index >= 0) return this.say("That link is already in the database.");
+			db.samples[arg0ID].push(args[1].trim());
+			Storage.exportDatabase(room.id);
+			return this.say("Sample team added.");
+		},
+		aliases: ['addsamples'],
+	},
+	removesample: {
+		command(target, room, user) {
+			if (this.isPm(room)) return this.say(`This can only be used in rooms.`);
+			if (!user.canPerform(room, 'driver')) return;
+			if (!target) return this.say(`Correct Syntax: ${commandCharacter}delsample __[tier]__, __[link]__`);
+			target = target.trim();
+			const args = target.split(',');
+			const db = Storage.getDatabase(room);
+			if (!db.samples) return this.say(`There are no samples.`);
+			if (!args[0]) return this.say(`Correct syntax: ${commandCharacter}delsample __[tier]__, __[link]__`);
+			const arg0ID = toID(args[0]);
+			if (!args[1]) return this.say(`Correct syntax: ${commandCharacter}delsample __[tier]__, __[link]__`);
+			if (!args[1].trim().startsWith('http')) return this.say("Please provide a valid link.");
+			if (!(arg0ID in db.samples)) return this.say(`The format ${args[0].trim()} wasn't found.`);
+			const index = db.samples[arg0ID].findIndex(link => toID(link) === toID(args[1]));
+			if (index < 0) return this.say("That link isn't in the database.");
+			db.samples[arg0ID].splice(index, 1);
+			Storage.exportDatabase(room.id);
+			return this.say("Sample team removed.");
+		},
+		aliases: ['removesamples', 'deletesample', 'deletesamples', 'delsample', 'remsample'],
+	},
+	samples: {
+		command(target, room, user) {
+			const args = target.trim().split(',');
+			if (this.isPm(room)) return;
+			const db = Storage.getDatabase(room);
+			if (!db.samples) return this.say(`There are no sample teams.`);
+			const arg0ID = toID(args[0]);
+			if (!(arg0ID in db.samples)) return this.say(`Format not found.`);
+			if (!db.samples[arg0ID].length) return this.say(`There are currently no sample teams for ${args[0].trim()}.`);
+			if (db.samples[arg0ID].length === 1) return this.say(`Sample teams for \`\`${args[0].trim()}\`\`: ${db.samples[arg0ID][0]}`);
+			if (Users.self.hasRank(room, 'bot')) {
+				let buf = `<h4>Sample teams for ${arg0ID}:</h4>`;
+				buf += `<p>`;
+				for (const link of db.samples[arg0ID]) {
+					if (db.samples[arg0ID].indexOf(link) === db.samples[arg0ID].length - 1) {
+						buf += `&bull; <a href="${link}">${link}</a>`;
+					} else {
+						buf += `&bull; <a href="${link}">${link}</a><br />`;
+					}
+				}
+				buf += `</p>`;
+				return this.sayHtml(buf, room);
+			}
+			const prettyTeamList = `Sample teams for ${arg0ID}:\n\n${db.samples[arg0ID].map((team, index) => `${index + 1}: ${team}`).join('\n')}`;
+			Tools.uploadToHastebin(prettyTeamList, hastebinUrl => {
+				return this.say(`Sample teams for ${arg0ID}: ${hastebinUrl}`);
+			});
+		},
+		aliases: ['sample'],
+	},
+	host: {
+		command(target, room, user) {
+			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
+			if (!user.canPerform(room, 'driver')) return;
+			if (!target) return this.say(`Correct syntax: ${commandCharacter}host __[user]__`);
+			target = target.trim();
+			if (!Storage.databases[room.id].hosts) {
+				Storage.databases[room.id].hosts = [];
+				Storage.exportDatabase(room.id);
+			}
+			const db = Storage.getDatabase(room).hosts;
+			if (target.length > 18) return this.say(`Please provide a real username.`);
+			const index = db!.findIndex(host => toID(host) === toID(target));
+			if (index >= 0) return this.say(`That user is already a host.`);
+			db!.push(toID(target));
+			Storage.exportDatabase(room.id);
+			this.makeModnote(`ADDHOST: ${toID(target)} by ${user.id}`);
+			return this.say(`User '${target}' successfully added as a host.`);
+		},
+		aliases: ['addhost'],
+	},
+	dehost: {
+		command(target, room, user) {
+			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
+			if (!user.canPerform(room, 'driver')) return;
+			if (!target) return this.say(`Correct syntax: ${commandCharacter}dehost __[user]__`);
+			target = target.trim();
+			const db = Storage.getDatabase(room).hosts;
+			if (!db) return this.say(`There are no hosts.`);
+			if (target.length > 18) return this.say(`Please provide a real username.`);
+			const index = db.findIndex(host => toID(host) === toID(target));
+			if (index < 0) return this.say(`That user is not a host.`);
+			db.splice(index, 1);
+			Storage.exportDatabase(room.id);
+			this.makeModnote(`REMOVEHOST: ${toID(target)} by ${user.id}`);
+			return this.say(`User '${target}' successfully removed as a host.`);
+		},
+		aliases: ['unhost', 'remhost', 'removehost'],
+	},
+	clearhosts: {
+		command(target, room, user) {
+			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'roomowner')) return;
+			target = target.trim();
+			Storage.getDatabase(room).hosts = [];
+			Storage.exportDatabase(room.id);
+			this.makeModnote(`${user.name} cleared the host list.`);
+			return this.say(`Host list successfully cleared.`);
+		},
+	},
+	viewhosts: {
+		command(target, room, user) {
+			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'driver')) return;
+			const hosts = Storage.getDatabase(room).hosts;
+			if (!hosts || !hosts.length) return this.say(`There are currently no hosts.`);
+			const prettyHostList = `Hosts for ${room.id}:\n\n${hosts.map((host, index) => `${index + 1}: ${host}`).join('\n')}`;
+			Tools.uploadToHastebin(prettyHostList, hastebinUrl => {
+				this.say(`**${room.id}** hosts: ${hastebinUrl}`);
+			});
+		},
+		aliases: ['hosts'],
+	},
+	/**
+	 * Room commands
+	 */
+	eliminationtour: {
+		command(target, room, user) {
+			if (!this.isPm(room) && !user.canPerform(room, 'driver') && !user.isHost(room)) return;
+			const args = target.split(' ');
+			if (!args[0] || toID(args[0]) === 'help') {
+				return this.say(`\`\`@etour\`\` command guide: [[here <https://pastebin.com/raw/fN23vVUn>]]`);
+			}
+			if (this.isPm(room)) return;
+			const db = Storage.getDatabase(room);
+			if (!db.tourRuleset) {
+				db.tourRuleset = [];
+			}
+			// const tour = db.tourRuleset;
+			// const samples = db.samples!;
+			if (!db.tourcfg) {
+				db.tourcfg = {
+					autodq: {
+						normal: 3,
+						randoms: 2,
+					},
+					autostart: 2,
+				};
+			}
+			const tourcfg = db.tourcfg;
+			const arg0ID = toID(args[0]);
+			if (['start', 'forcestart'].includes(arg0ID)) {
+				this.makeModnote(`TOUR: started by ${user.id}`);
+				this.say(`/tour start`);
+				return;
+			} else if (['end', 'forceend'].includes(arg0ID)) {
+				this.makeModnote(`TOUR: ended by ${user.id}`);
+				this.say('/tour end');
+				return;
+			} else if (['name', 'setname'].includes(arg0ID)) {
+				const name = args.slice(1).join(' ').trim();
+				if (!name) return this.say(`Correct syntax: ${commandCharacter}etour name __[name]__`);
+				this.makeModnote(`TOUR: renamed by ${user.id}`);
+				this.say(`/tour name ${name}`);
+				return;
+			} else if (['clearname', 'delname'].includes(arg0ID)) {
+				this.makeModnote(`TOUR: name cleared by ${user.id}`);
+				this.say(`/tour clearname`);
+				return;
+			} else if (['autostart', 'setautostart', 'as'].includes(arg0ID)) {
+				if (!args[1]) return this.say(`Correct syntax: ${commandCharacter}etour autostart __[number | "off"]__`);
+				const autostartTimer = parseInt(args[1]);
+				if (toID(args[1]) !== 'off' && isNaN(autostartTimer)) return this.say(`${args[1]} is not a number.`);
+				if (toID(args[1]) === 'off' || autostartTimer === 0) return this.say(`/tour autostart off`);
+				this.makeModnote(`TOUR: autostart set by ${user.id}`);
+				this.say(`/tour autostart ${autostartTimer}`);
+				return;
+			} else if (['autodq', 'setautodq', 'adq', 'runautodq'].includes(arg0ID)) {
+				if (arg0ID === 'runautodq') return this.say(`/tour runautodq`);
+				if (!args[1]) return this.say(`Correct syntax: ${commandCharacter}etour autodq __[number | "off"]__`);
+				const autodqTimer = parseInt(args[1]);
+				if (toID(args[1]) !== 'off' && isNaN(autodqTimer)) return this.say(`${args[1]} is not a number.`);
+				if (toID(args[1]) === 'off' || autodqTimer === 0) return this.say(`/tour autodq off`);
+				this.makeModnote(`TOUR: autodq set by ${user.id}`);
+				this.say(`/tour autodq ${autodqTimer}`);
+				return;
+			} else if (['dq', 'disqualify'].includes(arg0ID)) {
+				const targetUString = args.slice(1).join(' ').trim();
+				if (!Tools.isUsernameLength(targetUString)) return this.say(`User '${targetUString}' not found.`);
+				this.makeModnote(`TOUR: ${targetUString} disqualified by ${user.id}`);
+				this.say(`/tour dq ${targetUString}`);
+				return;
+			} else if (['addrule'].includes(arg0ID)) {
+				const addedRules = args.slice(1).join(' ').trim().split(',');
+				if (!addedRules.length) return this.say(`Please provide rules to add. Here is a list: https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md`);
+				for (const rule of addedRules.map(r => r.trim())) {
+					if (!Dex.getFormat(rule)) return this.say(`Rule '${rule}' not found. [[Here is a list of rules <Here is a list: https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md>]]`);
+					if (db.tourRuleset.includes(`!${rule}`)) {
+						const ruleIndex = db.tourRuleset.indexOf(`!${rule}`);
+						db.tourRuleset.splice(ruleIndex, 1);
+						Storage.exportDatabase(room.id);
+					} else {
+						if (db.tourRuleset.includes(rule)) return this.say(`The rule ${rule} is already added.`);
+						db.tourRuleset.push(rule);
+						Storage.exportDatabase(room.id);
+					}
+				}
+				this.makeModnote(`TOUR: Ruleset adjusted by ${user.id}`);
+				this.say(`/tour rules ${db.tourRuleset.join(',')}`);
+				return;
+			} else if (['delrule', 'removerule'].includes(arg0ID)) {
+				const removedRules = args.slice(1).join(' ').trim().split(',');
+				if (!removedRules.length) return this.say(`Please provide rules to add. Here is a list: https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md`);
+				for (const rule of removedRules.map(r => r.trim())) {
+					if (!Dex.getFormat(rule)) return this.say(`Rule '${rule}' not found. [[Here is a list of rules <Here is a list: https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md>]]`);
+					if (db.tourRuleset.includes(rule)) {
+						const ruleIndex = db.tourRuleset.indexOf(rule);
+						db.tourRuleset.splice(ruleIndex, 1);
+						Storage.exportDatabase(room.id);
+					} else {
+						if (db.tourRuleset.includes(`!${rule}`)) return this.say(`The rule ${rule} is already added.`);
+						db.tourRuleset.push(`!${rule}`);
+						Storage.exportDatabase(room.id);
+					}
+				}
+				this.makeModnote(`TOUR: Ruleset adjusted by ${user.id}`);
+				this.say(`/tour rules ${db.tourRuleset.join(',')}`);
+				return;
+			} else if (['ban', 'addban'].includes(arg0ID)) {
+				const banlist = args.slice(1).join(' ').trim().split(',');
+				if (!banlist.length) return this.say(`Please provide Pokemon/items/moves/abilities/tiers to ban.`);
+				for (const ban of banlist.map(r => r.trim())) {
+					if (
+						!Dex.getTemplate(ban) &&
+						!Dex.getItem(ban) &&
+						!Dex.getMove(ban) &&
+						!Dex.getAbility(ban) &&
+						!ALL_TIERS.includes(toID(ban))
+					) {
+						return this.say(`Invalid ban '${ban}'`);
+					}
+					if (db.tourRuleset.includes(`+${ban}`)) {
+						const banIndex = db.tourRuleset.indexOf(`+${ban}`);
+						db.tourRuleset.splice(banIndex, 1);
+						Storage.exportDatabase(room.id);
+					} else {
+						if (db.tourRuleset.includes(`-${ban}`)) return this.say(`The object ${ban} is already added.`);
+						db.tourRuleset.push(`-${ban}`);
+						Storage.exportDatabase(room.id);
+					}
+				}
+				this.makeModnote(`TOUR: Ruleset adjusted by ${user.id}`);
+				this.say(`/tour rules ${db.tourRuleset.join(',')}`);
+				return;
+			} else if (['unban', 'removeban'].includes(arg0ID)) {
+				const unbanlist = args.slice(1).join(' ').trim().split(',');
+				if (!unbanlist.length) return this.say(`Please provide Pokemon/items/moves/abilities/tiers to unban.`);
+				for (const unban of unbanlist.map(r => r.trim())) {
+					if (
+						!Dex.getTemplate(unban) &&
+						!Dex.getItem(unban) &&
+						!Dex.getMove(unban) &&
+						!Dex.getAbility(unban) &&
+						!ALL_TIERS.includes(toID(unban))
+					) {
+						return this.say(`Invalid unban '${unban}'`);
+					}
+					if (db.tourRuleset.includes(`-${unban}`)) {
+						const unbanIndex = db.tourRuleset.indexOf(`-${unban}`);
+						db.tourRuleset.splice(unbanIndex, 1);
+						Storage.exportDatabase(room.id);
+					} else {
+						if (db.tourRuleset.includes(`+${unban}`)) return this.say(`The object ${unban} is already added.`);
+						db.tourRuleset.push(`+${unban}`);
+						Storage.exportDatabase(room.id);
+					}
+				}
+				this.makeModnote(`TOUR: Ruleset adjusted by ${user.id}`);
+				this.say(`/tour rules ${db.tourRuleset.join(',')}`);
+				return;
+			} else if (['rules'].includes(arg0ID)) {
+				const ruleList = args.slice(1).join(' ').trim().split(',');
+				if (!ruleList.length) return this.say(`Invalid rule ''`);
+				for (const rule of ruleList.map(r => r.trim())) {
+					if (rule.startsWith('!')) {
+						if (!Dex.getFormat(rule)) return this.say(`Invalid Rule '${rule}'`);
+						if (db.tourRuleset.map(toID).includes(toID(rule))) {
+							db.tourRuleset.splice(db.tourRuleset.map(toID).indexOf(toID(rule)), 1);
+							Storage.exportDatabase(room.id);
+						} else {
+							if (db.tourRuleset.map(toID).includes(toID(rule))) {
+								return this.say(`${rule} is already in the ruleset.`);
+							}
+							db.tourRuleset.push(rule);
+							Storage.exportDatabase(room.id);
+						}
+					} else if (['+', '-'].includes(rule.charAt(0))) {
+						const slicedRule = rule.substr(1);
+						if (slicedRule.includes('+')) {
+							const slindex = slicedRule.indexOf('++');
+							let split = slicedRule.split('+');
+							if (slindex >= 0) split = slicedRule.split('++');
+							for (const sp of split.map(x => x.trim())) {
+								if (
+									!Dex.getTemplate(sp) &&
+									!Dex.getItem(sp) &&
+									!Dex.getMove(sp) &&
+									!Dex.getAbility(sp) &&
+									!ALL_TIERS.includes(toID(sp))
+								) {
+									return this.say(`Invalid section of ${rule.charAt(0) === '-' ? 'ban' : 'unban'} '${rule}': ${sp}`);
+								}
+								if (toID(sp) === 'metronome') {
+									return this.say(`Please specify the Metronome you'd like to ban by preceding it with \`\`item:\`\` or \`\`move:\`\``);
+								}
+							}
+							if (db.tourRuleset.map(toID).includes(toID(rule))) {
+								db.tourRuleset.splice(db.tourRuleset.map(toID).indexOf(toID(rule)), 1);
+								Storage.exportDatabase(room.id);
+							} else {
+								if (db.tourRuleset.map(toID).includes(toID(rule))) {
+									return this.say(`${rule} is already in the ruleset.`);
+								}
+								db.tourRuleset.push(rule);
+								Storage.exportDatabase(room.id);
+							}
+						} else {
+							if (
+								!Dex.getTemplate(rule) &&
+								!Dex.getItem(rule) &&
+								!Dex.getMove(rule) &&
+								!Dex.getAbility(rule) &&
+								!ALL_TIERS.includes(toID(rule))
+							) {
+								return this.say(`Invalid ${rule.charAt(0) === '-' ? 'ban' : 'unban'} '${rule}'`);
+							}
+							if (toID(rule) === 'metronome') {
+								return this.say(`Please specify the Metronome you'd like to ban by preceding it with \`\`item:\`\` or \`\`move:\`\``);
+							}
+							if (db.tourRuleset.map(toID).includes(toID(rule))) {
+								db.tourRuleset.splice(db.tourRuleset.map(toID).indexOf(toID(rule)), 1);
+								Storage.exportDatabase(room.id);
+							} else {
+								if (db.tourRuleset.map(toID).includes(toID(rule))) {
+									return this.say(`${rule} is already in the ruleset.`);
+								}
+								db.tourRuleset.push(rule);
+								Storage.exportDatabase(room.id);
+							}
+						}
+					} else {
+						if (!Dex.getFormat(rule)) return this.say(`Invalid Rule '${rule}'`);
+						if (db.tourRuleset.map(toID).includes(toID(rule))) {
+							db.tourRuleset.splice(db.tourRuleset.map(toID).indexOf(toID(rule)), 1);
+							Storage.exportDatabase(room.id);
+						} else {
+							if (db.tourRuleset.map(toID).includes(toID(rule))) {
+								return this.say(`${rule} is already in the ruleset.`);
+							}
+							db.tourRuleset.push(rule);
+							Storage.exportDatabase(room.id);
+						}
+					}
+				}
+				this.makeModnote(`TOUR: Ruleset adjusted by ${user.id}`);
+				this.say(`/tour rules ${db.tourRuleset.join(',')}`);
+				return;
+			} else if (['clearrules'].includes(arg0ID)) {
+				db.tourRuleset = [];
+				this.makeModnote(`TOUR: Ruleset cleared by ${user.id}`);
+				this.say(`/tour clearrules`);
+				return;
+			} else if (['viewrules'].includes(arg0ID)) {
+				this.say(`!tour viewrules`);
+				return;
+			} else if (['timer', 'forcetimer'].includes(arg0ID)) {
+				if (!args[1] || !['on', 'off'].includes(toID(args[1]))) return this.say(`Correct syntax: ${commandCharacter}etour timer __["on" | "off"]__`);
+				this.makeModnote(`TOUR: Forcetimer toggled by ${user.id}`);
+				this.say(`/tour forcetimer ${toID(args[1])}`);
+				return;
+			} else if (['scout', 'scouting'].includes(arg0ID)) {
+				if (!args[1] || !['on', 'off'].includes(toID(args[1]))) return this.say(`Correct syntax: ${commandCharacter}etour scouting __["on" | "off"]__`);
+				this.makeModnote(`TOUR: Scouting toggled by ${user.id}`);
+				if (toID(args[1]) === 'on') {
+					this.say(`/tour scouting allow`);
+				} else {
+					this.say(`/tour scouting disallow`);
+				}
+				return;
+			} else if (['modjoin'].includes(arg0ID)) {
+				if (!args[1] || !['on', 'off'].includes(toID(args[1]))) return this.say(`Correct syntax: ${commandCharacter}etour scouting __["on" | "off"]__`);
+				this.makeModnote(`TOUR: Modjoin toggled by ${user.id}`);
+				if (toID(args[1]) === 'on') {
+					this.say(`/tour modjoin allow`);
+				} else {
+					this.say(`/tour modjoin disallow`);
+				}
+				return;
+			} else if (['cap', 'playercap'].includes(arg0ID)) {
+				const arg1Int = parseInt(args[1]);
+				if (!args[1] || isNaN(arg1Int)) return this.say(`Correct syntax: ${commandCharacter}etour playercap __[number]__`);
+				this.makeModnote(`TOUR: Player cap set to ${arg1Int} by ${user.id}`);
+				this.say(`/tour cap ${arg1Int}`);
+				return;
+			} else if (arg0ID) {
+				const targets = args.join(' ').trim().split(',');
+				const f = targets[0];
+				const format = Dex.getFormat(f) ? Dex.getFormat(f) : Dex.getCustomFormat(f, room) ? Dex.getCustomFormat(f, room) : null;
+				if (!format) return this.say(`Please provide a valid format.`);
+				const baseFormat = 'id' in format ? format : format.baseFormat;
+				let formatid: string;
+				formatid = baseFormat.id;
+				let tourcmd = `/tour new ${formatid}`;
+				if (targets[1] && ['elimination', 'elim', 'roundrobin'].includes(toID(targets[1]))) {
+					tourcmd += `, ${toID(targets[1])}`;
+				} else {
+					tourcmd += `, elimination`;
+				}
+				if (targets[2]) {
+					const t2Int = parseInt(targets[2]);
+					if (isNaN(t2Int)) return this.say(`Correct syntax: ${commandCharacter}etour __[format]__, __["elimination" | "roundrobin"]__, __[player cap]__`);
+					tourcmd += `, ${t2Int}`;
+				} else {
+					tourcmd += `,`;
+				}
+				if (targets[3]) {
+					const t3Int = parseInt(targets[3]);
+					if (isNaN(t3Int)) return this.say(`Correct syntax: ${commandCharacter}etour __[format]__, __["elimination" | "roundrobin"]__, __[player cap]__, __[rounds]__`);
+					tourcmd += `, ${t3Int}`;
+				} else {
+					tourcmd += `,`;
+				}
+				const name = targets[4] ? targets.slice(4).join(',') : format.name !== baseFormat.name ? format.name.trim() : baseFormat.name.trim();
+				if (name) {
+					tourcmd += `, ${name}`;
+				} else {
+					tourcmd += `,`;
+				}
+				this.makeModnote(`TOUR: ${formatid} made by ${user.id}`);
+				db.tourRuleset = [];
+				Storage.exportDatabase(room.id);
+				this.say(tourcmd);
+				if (tourcfg.autostart && !['off', 0].includes(tourcfg.autostart)) {
+					this.say(`/tour autostart ${tourcfg.autostart}`);
+				}
+				if (!baseFormat.team) {
+					this.say(`!rfaq ${formatid.slice(0, 4)}samples`);
+				} else {
+					this.say(`!rfaq oldgenmoves`);
+				}
+				if (!('id' in format)) {
+					db.tourRuleset = db.tourRuleset.concat(format.remrules).concat(format.addrules).concat(format.bans).concat(format.unbans);
+					Storage.exportDatabase(room.id);
+					this.say(`/tour rules ${db.tourRuleset.join(',')}`);
+				}
+				return;
+			}
+		},
+		aliases: ['etour'],
+	},
+	deletebanlist: {
+		command(target, room, user) {
+			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
+			if (!user.canPerform(room, 'moderator')) return;
+			if (!target) return this.say(`Correct syntax: ${commandCharacter}delbanlist [ID]`);
+			const formatid = toID(target);
+			const rset = Storage.getDatabase(room).ruleset;
+			if (!rset) return this.say(`This room doesn't have any custom banlists.`);
+			if (!(formatid in rset)) return this.say(`The custom banlist '${target}' doesn't exist.`);
+			const name = rset[formatid].name;
+			delete rset[formatid];
+			Storage.exportDatabase(room.id);
+			return this.say(`Custom banlist for '${name}' successfully deleted.`);
+		},
+		aliases: ['delbanlist', 'delbl', 'removebanlist', 'delruleset', 'removeruleset'],
+	},
+	addbanlist: {
+		command(target, room, user) {
+			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
+			if (!user.canPerform(room, 'moderator')) return;
+			if (!target) return this.say(`Correct syntax: ${commandCharacter}addbanlist Name | Base Format | Ruleset <separated by commas and using !, +, - format> | Aliases (optional, separated by commas)`);
+			const targets = target.split('|');
+			if (targets.length < 3) return this.say(`Correct syntax: ${commandCharacter}addbanlist Name | Base Format | Ruleset <separated by commas and using !, +, - format> | Aliases (optional, separated by commas)`);
+			const name = targets[0].trim();
+			const id = toID(name);
+			const format = Dex.getFormat(targets[1]);
+			if (!format) return this.say(`Invalid format '${targets[1].trim()}'.`);
+			let ruleString = targets[2].trim();
+			if (ruleString.startsWith('https://hastebin.com/raw/')) {
+				https.get(ruleString, res => {
+					let data = '';
+					res.on('data', chunk => {
+						data += chunk;
+					});
+					ruleString = data;
+					res.on('end', () => {
+						ruleString = data;
+					});
+					ruleString = data;
+					res.on('error', err => console.log(err.stack));
+					ruleString = data;
+				});
+			}
+			const rules = ruleString.trim().split(',');
+			if (!rules.length) return this.say(`Correct syntax: ${commandCharacter}addbanlist Name | Base Format | Ruleset <separated by commas and using !, +, - format> | Aliases (optional, separated by commas)`);
+			if (!Storage.databases[room.id].ruleset) {
+				Storage.databases[room.id].ruleset = {};
+				Storage.exportDatabase(room.id);
+			}
+			const db = Storage.getDatabase(room);
+			if (!db.ruleset) {
+				db.ruleset = {};
+				Storage.exportDatabase(room.id);
+			}
+			if (!(id in db.ruleset)) {
+				db.ruleset[id] = {name: name.trim(), baseFormat: format, remrules: [], addrules: [], bans: [], unbans: []};
+				Storage.exportDatabase(room.id);
+				this.say(`Custom rule table for ${name} created. (This does not mean the rules were added.)`);
+			}
+			const rset = db.ruleset[id];
+			for (let rule of rules.map(r => r.trim())) {
+				if (rule.startsWith('!')) {
+					if (!Dex.getFormat(rule)) return this.say(`Invalid Rule '${rule}'`);
+					rset.remrules.push(rule);
+					Storage.exportDatabase(room.id);
+				} else if (['+', '-'].includes(rule.charAt(0))) {
+					const slicedRule = rule.substr(1);
+					if (slicedRule.includes('+')) {
+						const slindex = slicedRule.indexOf('++');
+						let split = slicedRule.split('+');
+						if (slindex >= 0) split = slicedRule.split('++');
+						for (let sp of split.map(x => x.trim())) {
+							const usingValidMetronomeBan = toID(sp).includes('metronome') && toID(sp.slice(4)) === 'metronome';
+							let usedSp = sp;
+							if (usingValidMetronomeBan) {
+								sp = toID(sp).startsWith('move') ? 'move:Metronome' : 'item:Metronome';
+								usedSp = 'metronome';
+							}
+							if (
+								!Dex.getTemplate(usedSp) &&
+								!Dex.getItem(usedSp) &&
+								!Dex.getMove(usedSp) &&
+								!Dex.getAbility(usedSp) &&
+								!ALL_TIERS.includes(toID(usedSp))
+							) {
+								return this.say(`Invalid section of ${rule.charAt(0) === '-' ? 'ban' : 'unban'} '${rule}': ${sp}`);
+							}
+							if (toID(usedSp) === 'metronome' && !usingValidMetronomeBan) {
+								return this.say(`Please specify the Metronome you'd like to ban by preceding it with \`\`item:\`\` or \`\`move:\`\``);
+							}
+						}
+						if (rule.charAt(0) === '+') {
+							rset.unbans.push(rule);
+							Storage.exportDatabase(room.id);
+						} else {
+							rset.bans.push(rule);
+							Storage.exportDatabase(room.id);
+						}
+					} else {
+						const usingValidMetronomeBan = toID(rule).includes('metronome') && toID(rule.slice(4)) === 'metronome';
+						let usedRule = rule;
+						if (usingValidMetronomeBan) {
+							rule = toID(rule).startsWith('move') ? 'move:Metronome' : 'item:Metronome';
+							usedRule = 'metronome';
+						}
+						if (
+							!Dex.getTemplate(usedRule) &&
+							!Dex.getItem(usedRule) &&
+							!Dex.getMove(usedRule) &&
+							!Dex.getAbility(usedRule) &&
+							!ALL_TIERS.includes(toID(usedRule))
+						) {
+							return this.say(`Invalid ${rule.charAt(0) === '-' ? 'ban' : 'unban'} '${rule}'`);
+						}
+						if (toID(usedRule) === 'metronome' && !usingValidMetronomeBan) {
+							return this.say(`Please specify the Metronome you'd like to ban by preceding it with \`\`item:\`\` or \`\`move:\`\``);
+						}
+						if (rule.charAt(0) === '+') {
+							rset.unbans.push(rule);
+							Storage.exportDatabase(room.id);
+						} else {
+							rset.bans.push(rule);
+							Storage.exportDatabase(room.id);
+						}
+					}
+				} else {
+					if (!Dex.getFormat(rule)) return this.say(`Invalid Rule '${rule}'`);
+					rset.addrules.push(rule);
+					Storage.exportDatabase(room.id);
+				}
+			}
+			if (targets[3]) {
+				const a = targets[3].trim().split(',').map(toID);
+				if (!rset.aliases) {
+					rset.aliases = a;
+					Storage.exportDatabase(room.id);
+				} else {
+					for (const al of a) {
+						if (rset.aliases.includes(al)) continue;
+						rset.aliases.push(al);
+						Storage.exportDatabase(room.id);
+					}
+				}
+			}
+			return this.say(`Custom banlist for format '${name.trim()}' added.`);
+		},
+		aliases: ['addruleset', 'addbl'],
+	},
+	/**
+	 * BOF commands
+	 */
+	/*massinvite: {
+		command(target, room, user) {
+			if (room.id !== 'bof') return;
+			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'roomowner')) return;
+			return this.say('/roomauth');
+		},
+	},*/
+	pokemon: {
+		command(target, room, user) {
+			if (room.id !== 'bof') return;
+			if (this.isPm(room)) return;
+			const db = Storage.getDatabase(room);
+			if (!db.rank) {
+				db.rank = {
+					pokeitem: 'driver',
+				};
+				Storage.exportDatabase(room.id);
+			}
+			if (!user.canPerform(room, db.rank.pokeitem)) return;
+			if (!target || !Dex.getTemplate(target)) return this.say(`that literally is not a pokemon`);
+			this.sayUhtml(toID(target), `<psicon pokemon="${toID(target)}">`, room);
+		},
+	},
+	item: {
+		command(target, room, user) {
+			if (room.id !== 'bof') return;
+			if (this.isPm(room)) return;
+			const db = Storage.getDatabase(room);
+			if (!db.rank) {
+				db.rank = {
+					pokeitem: 'driver',
+				};
+				Storage.exportDatabase(room.id);
+			}
+			if (!user.canPerform(room, db.rank.pokeitem)) return;
+			if (!target || !Dex.getItem(target)) return this.say(`that literally is not an item`);
+			this.sayUhtml(toID(target), `<psicon item="${toID(target)}">`, room);
+		},
+	},
+	repeat: {
+		command(target, room, user) {
+			if (room.id !== 'bof') return;
+			if (this.isPm(room)) return;
+			const count = parseInt(target.split(',')[0]);
+			if (isNaN(count)) return this.say(`${target.split(',')[0]} is not a number.`);
+			if (count < 0 || count > 5) return this.say(`The count must be a number between 1 and 100.`);
+			const args = target.split(',').slice(1);
+			if (args.length < 2) return;
+			for (const i of args) {
+				if (!Dex.getTemplate(i)) return this.say(`${i} is not a Pokemon.`);
+			}
+			let c = 0;
+			while (c < count) {
+				args.forEach(x => this.sayUhtml('repeat', `<psicon pokemon="${x}">`, room));
+				c++;
+			}
+		},
+	},
+	lasagna: {
+		command(target, room, user) {
+			if (room.id !== 'bof' || this.isPm(room) || !user.canPerform(room, 'roomowner')) return;
+			const str = 'i fucking hate it i fucking hate lasagna its the fucking its the worst thing my dad always makes fucking god damn lasagna at christmas and its the worst i fucking hate it its like my least favorite food my brother hates it too i dont know why my dad fucking makes that shit its fucking disgusting i hate lasagna fuck';
+			if (target) {
+				if (!Tools.isUsernameLength(target.trim())) return;
+				return this.say(`/pminfobox ${target}, ${str}`);
+			}
+			this.sayUhtml('lasgna', 'i fucking hate it i fucking hate lasagna its the fucking its the worst thing my dad always makes fucking god damn lasagna at christmas and its the worst i fucking hate it its like my least favorite food my brother hates it too i dont know why my dad fucking makes that shit its fucking disgusting i hate lasagna fuck', room);
+		},
+	},
+	illegalmons: {
+		command(target, room, user) {
+			if (room.id !== 'bof') return;
+			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'roomowner')) return;
+			let t = toID(target);
+			if (!t) t = 'all';
+			if (t === 'all') return this.say(`lol im not broadcasting that`);
+			const illegalMonsList: {[k: string]: string[]} = {cap: [], past: [], future: [], custom: [], unobtainable: [], lgpe: []};
+			for (const i in Dex.data.pokedex) {
+				const template = Dex.getTemplate(i);
+				if (!template || typeof template.isNonstandard !== 'string') continue;
+				if (template.isNonstandard === 'CAP') {
+					illegalMonsList.cap.push(template.name);
+				}
+				if (template.isNonstandard === 'Past') {
+					illegalMonsList.past.push(template.name);
+				}
+				if (template.isNonstandard === 'Future') {
+					illegalMonsList.future.push(template.name);
+				}
+				if (template.isNonstandard === 'Unobtainable') {
+					illegalMonsList.unobtainable.push(template.name);
+				}
+				if (template.isNonstandard === 'Custom') {
+					illegalMonsList.custom.push(template.name);
+				}
+				if (template.isNonstandard === 'LGPE') {
+					illegalMonsList.lgpe.push(template.name);
+				}
+			}
+			let usedArray = [];
+			switch (t) {
+				case 'cap': usedArray = illegalMonsList.cap; break;
+				// case 'past': usedArray = illegalMonsList.past; break;
+				case 'future': usedArray = illegalMonsList.future; break;
+				case 'unobtainable': usedArray = illegalMonsList.unobtainable; break;
+				case 'custom': usedArray = illegalMonsList.custom; break;
+				case 'lgpe': usedArray = illegalMonsList.lgpe; break;
+				default: usedArray = illegalMonsList.custom.concat(illegalMonsList.lgpe); break;
+			}
+			const buf = usedArray.sort().map(x => `<span style="white-space:nowrap;text-decoration:none;"><psicon pokemon="${x}">${x}</span>`).join(`,`);
+			this.sayHtml(buf, room);
+		},
+	},
 	/**
 	 * Developer commands
 	 */
 	eval: {
 		command(target, room, user) {
+			if (room.id === 'bof' && !user.isDeveloper()) {
+				return this.say(`/pm ${user.id}, good job trying to use my commands you clown`);
+			}
 			try {
 				this.say(eval(target));
 			} catch (e) {
@@ -65,17 +918,9 @@ const commands: Dict<ICommandDefinition> = {
 			const hasModules: boolean[] = moduleOrder.slice().map(x => false);
 			const targets = target.split(",");
 			for (let i = 0; i < targets.length; i++) {
-				const id = Tools.toId(targets[i]) as ReloadableModule;
+				const id = toID(targets[i]) as ReloadableModule;
 				if (id === 'commandparser') {
 					if (Storage.workers.logs.requestsByUserid.length) return this.say("You must wait for all logs requests to finish first.");
-				} else if (id === 'games') {
-					const workerGameRooms: Room[] = [];
-					Users.self.rooms.forEach((rank, room) => {
-						if (room.game && room.game.usesWorkers) workerGameRooms.push(room);
-					});
-					if (workerGameRooms.length) {
-						return this.say("You must wait for the game" + (workerGameRooms.length > 1 ? "s" : "") + " in " + Tools.joinList(workerGameRooms.map(x => x.title)) + " to finish first.");
-					}
 				}
 				const moduleIndex = moduleOrder.indexOf(id);
 				if (moduleIndex !== -1) {
@@ -94,7 +939,6 @@ const commands: Dict<ICommandDefinition> = {
 			}
 
 			if (modules.includes('commandparser')) CommandParser.reloadInProgress = true;
-			if (modules.includes('games')) Games.reloadInProgress = true;
 
 			this.say("Running ``tsc``...");
 			// eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -116,7 +960,6 @@ const commands: Dict<ICommandDefinition> = {
 						Tools.uncacheTree('./commands');
 						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						global.Commands = CommandParser.loadBaseCommands(require('./commands'));
-						if (!modules.includes('games')) Games.loadFormatCommands();
 					} else if (modules[i] === 'config') {
 						Tools.uncacheTree('./config');
 						Tools.uncacheTree('./config-loader');
@@ -129,15 +972,6 @@ const commands: Dict<ICommandDefinition> = {
 						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						const dex: typeof import('./dex') = require('./dex');
 						global.Dex = new dex.Dex();
-					} else if (modules[i] === 'games') {
-						const oldGames = global.Games;
-						Games.unrefWorkers();
-						Tools.uncacheTree('./games');
-						Tools.uncacheTree('./room-activity');
-						// eslint-disable-next-line @typescript-eslint/no-var-requires
-						const games: typeof import('./games') = require('./games');
-						global.Games = new games.Games();
-						Games.onReload(oldGames);
 					} else if (modules[i] === 'storage') {
 						const oldStorage = global.Storage;
 						Storage.unrefWorkers();
@@ -169,7 +1003,6 @@ const commands: Dict<ICommandDefinition> = {
 				this.say("Failed to build files.");
 				reloadInProgress = false;
 				if (CommandParser.reloadInProgress) CommandParser.reloadInProgress = false;
-				if (Games.reloadInProgress) Games.reloadInProgress = false;
 			});
 		},
 		aliases: ['hotpatch'],
@@ -233,1217 +1066,6 @@ const commands: Dict<ICommandDefinition> = {
 			this.sayHtml("<b>" + format.name + "</b>" + html, pmRoom);
 		},
 		aliases: ['om', 'tier'],
-	},
-	randombattle: {
-		command(target, room, user) {
-			if (!this.isPm(room) && !user.hasRank(room, 'voice')) return;
-			const pokemon = Dex.getPokemon(target);
-			if (!pokemon) return this.say("'" + target.trim() + "' is not a valid Pokemon.");
-			if (!pokemon.randomBattleMoves) return this.say("No Random Battle data found for " + pokemon.species + ".");
-			const data: string[] = [];
-			for (let i = 0; i < pokemon.randomBattleMoves.length; i++) {
-				data.push(Dex.getExistingMove(pokemon.randomBattleMoves[i]).name);
-			}
-			this.say("**" + pokemon.species + " moves**: " + Tools.joinList(data.sort()) + ".");
-		},
-		aliases: ['randombattles', 'randbat', 'randbats'],
-	},
-	randomdoublesbattle: {
-		command(target, room, user) {
-			if (!this.isPm(room) && !user.hasRank(room, 'voice')) return;
-			const pokemon = Dex.getPokemon(target);
-			if (!pokemon) return this.say("'" + target.trim() + "' is not a valid Pokemon.");
-			if (!pokemon.randomDoubleBattleMoves) return this.say("No Random Doubles Battle data found for " + pokemon.species + ".");
-			const data: string[] = [];
-			for (let i = 0; i < pokemon.randomDoubleBattleMoves.length; i++) {
-				data.push(Dex.getExistingMove(pokemon.randomDoubleBattleMoves[i]).name);
-			}
-			this.say("**" + pokemon.species + " doubles moves**: " + Tools.joinList(data.sort()) + ".");
-		},
-		aliases: ['randomdoublesbattles', 'randombattledoubles', 'randombattlesdoubles', 'randdubs', 'randbatdubs', 'randbatsdubs'],
-	},
-
-	/**
-	 * Game commands
-	 */
-	startvote: {
-		command(target, room, user) {
-			if (this.isPm(room) || !user.hasRank(room, 'voice') || room.game || room.userHostedGame) return;
-			if (!Config.allowScriptedGames || !Config.allowScriptedGames.includes(room.id)) return this.sayError(['disabledGameFeatures', room.title]);
-			if (!Users.self.hasRank(room, 'bot')) return this.sayError(['missingBotRankForFeatures', 'scripted game']);
-			const remainingGameCooldown = Games.getRemainingGameCooldown(room);
-			if (remainingGameCooldown > 1000) {
-				const durationString = Tools.toDurationString(remainingGameCooldown);
-				this.say("There " + (durationString.endsWith('s') ? "are" : "is") + " still " + durationString + " of the game cooldown remaining.");
-				return;
-			}
-			if (Games.reloadInProgress) return this.sayError(['reloadInProgress']);
-			const game = Games.createGame(room, Games.getInternalFormat('vote'));
-			game.signups();
-		},
-		aliases: ['sv'],
-	},
-	egg: {
-		async asyncCommand(target, room, user) {
-			if (this.isPm(room) || !user.hasRank(room, 'voice') || room.game || room.userHostedGame) return;
-			if (!Config.allowScriptedGames || !Config.allowScriptedGames.includes(room.id)) return this.sayError(['disabledGameFeatures', room.title]);
-			if (!Users.self.hasRank(room, 'bot')) return this.sayError(['missingBotRankForFeatures', 'scripted game']);
-			const remainingGameCooldown = Games.getRemainingGameCooldown(room, true);
-			if (remainingGameCooldown > 1000) {
-				const durationString = Tools.toDurationString(remainingGameCooldown);
-				this.say("There " + (durationString.endsWith('s') ? "are" : "is") + " still " + durationString + " of the minigame cooldown remaining.");
-				return;
-			}
-			if (Games.reloadInProgress) return this.sayError(['reloadInProgress']);
-			const targetUser = Users.get(target);
-			if (!targetUser) return this.say("You must specify a user.");
-			const game = Games.createGame(room, Games.getInternalFormat('eggtoss'));
-			game.signups();
-			const canEgg = await this.run('toss');
-			if (canEgg) {
-				this.say("**" + user.name + "** handed an egg to **" + targetUser.name + "**! Pass it around with ``" + Config.commandCharacter + "toss [user]`` before it explodes!");
-			} else {
-				game.end();
-			}
-		},
-	},
-	creategame: {
-		command(target, room, user, cmd) {
-			if (this.isPm(room) || !user.hasRank(room, 'voice') || room.game || room.userHostedGame) return;
-			if (!Config.allowScriptedGames || !Config.allowScriptedGames.includes(room.id)) return this.sayError(['disabledGameFeatures', room.title]);
-			if (!Users.self.hasRank(room, 'bot')) return this.sayError(['missingBotRankForFeatures', 'scripted game']);
-			const remainingGameCooldown = Games.getRemainingGameCooldown(room);
-			if (remainingGameCooldown > 1000) {
-				const durationString = Tools.toDurationString(remainingGameCooldown);
-				this.say("There " + (durationString.endsWith('s') ? "are" : "is") + " still " + durationString + " of the game cooldown remaining.");
-				return;
-			}
-			if (Games.reloadInProgress) return this.sayError(['reloadInProgress']);
-
-			let format: IGameFormat | undefined;
-			if (cmd === 'createrandomgame' || cmd === 'crg') {
-				const option = Tools.toId(target);
-				let formats: string[];
-				if (option === 'freejoin' || option === 'fj') {
-					formats = Games.freejoinFormatTargets;
-				} else {
-					formats = Object.keys(Games.formats);
-				}
-				formats = Tools.shuffle(formats);
-
-				for (let i = 0; i < formats.length; i++) {
-					const randomFormat = Games.getExistingFormat(formats[i]);
-					if (Games.canCreateGame(room, randomFormat) === true) {
-						format = randomFormat;
-						break;
-					}
-				}
-				if (!format) return this.say("A random game could not be chosen.");
-			} else {
-				const inputFormat = Games.getFormat(target, true);
-				if (Array.isArray(inputFormat)) return this.sayError(inputFormat);
-				const canCreateGame = Games.canCreateGame(room, inputFormat);
-				if (canCreateGame !== true) return this.say(canCreateGame + " Please choose a different game!");
-				format = inputFormat;
-			}
-
-			const game = Games.createGame(room, format);
-			game.signups();
-		},
-		aliases: ['cg', 'createrandomgame', 'crg'],
-	},
-	startgame: {
-		command(target, room, user) {
-			if (this.isPm(room)) return;
-			if (room.game) {
-				if (!user.hasRank(room, 'voice') || room.game.started) return;
-				if (!room.game.start()) this.say("Not enough players have joined the game.");
-			} else if (room.userHostedGame) {
-				if (user.id !== room.userHostedGame.hostId || room.userHostedGame.started) return;
-				if (!room.userHostedGame.start()) user.say("Not enough players have joined your game.");
-			}
-		},
-		aliases: ['sg'],
-	},
-	endgame: {
-		command(target, room, user) {
-			if (this.isPm(room)) {
-				if (room.game) {
-					room.game.forceEnd(user, target.trim());
-				}
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				if (room.game) {
-					room.game.forceEnd(user, target.trim());
-				} else if (room.userHostedGame) {
-					room.userHostedGame.forceEnd(user, target.trim());
-				}
-			}
-		},
-	},
-	joingame: {
-		command(target, room, user) {
-			if (this.isPm(room)) {
-				if (!target) return;
-				const chatRoom = Rooms.search(Tools.toRoomId(target));
-				if (!chatRoom) return;
-
-				const userData = user.rooms.get(chatRoom);
-				if (userData && userData.rank === Client.groupSymbols.muted) return this.say("You cannot join games while you are muted.");
-
-				if (chatRoom.game) {
-					chatRoom.game.addPlayer(user);
-				} else if (chatRoom.userHostedGame) {
-					chatRoom.userHostedGame.addPlayer(user);
-				}
-			} else {
-				if (room.game) {
-					room.game.addPlayer(user);
-				} else if (room.userHostedGame) {
-					room.userHostedGame.addPlayer(user);
-				}
-			}
-		},
-		aliases: ['jg'],
-	},
-	leavegame: {
-		command(target, room, user) {
-			let game: Game | undefined;
-			let userHostedGame: UserHosted | undefined;
-
-			if (this.isPm(room)) {
-				if (!target) return;
-				const chatRoom = Rooms.search(Tools.toRoomId(target));
-				if (!chatRoom) return;
-
-				if (chatRoom.game) {
-					game = chatRoom.game;
-				} else if (chatRoom.userHostedGame) {
-					userHostedGame = chatRoom.userHostedGame;
-				}
-			} else {
-				if (room.game) {
-					game = room.game;
-				} else if (room.userHostedGame) {
-					userHostedGame = room.userHostedGame;
-				}
-			}
-
-			if (game) {
-				game.removePlayer(user);
-			} else if (userHostedGame) {
-				if (!(user.id in userHostedGame.players) || userHostedGame.players[user.id].eliminated) return;
-				userHostedGame.destroyPlayer(user);
-				user.say("You have left the " + userHostedGame.name + " " + userHostedGame.activityType + ".");
-			}
-		},
-	},
-	dqplayer: {
-		command(target, room, user) {
-			if (this.isPm(room) || !user.hasRank(room, 'driver') || !room.game) return;
-			const id = Tools.toId(target);
-			if (!(id in room.game.players)) return this.say("You must specify a player currently in the game.");
-			const player = room.game.players[id];
-			room.game.winners.delete(player);
-			room.game.removePlayer(target, true);
-			this.say(player.name + " has been disqualified from the game.");
-			this.sayCommand("/modnote " + user.name + " DQed " + player.name + " from " + room.game.name + ".");
-		},
-	},
-	game: {
-		command(target, room, user) {
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(Tools.toRoomId(target));
-				if (!targetRoom) return this.sayError(['invalidBotRoom', target]);
-				if (!user.rooms.has(targetRoom)) return this.sayError(['noPmHtmlRoom', targetRoom.title]);
-				gameRoom = targetRoom;
-			} else {
-				if (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)) return;
-				gameRoom = room;
-			}
-			if (gameRoom.game) {
-				const game = gameRoom.game;
-				let html = (game.mascot ? Dex.getPokemonIcon(game.mascot) : "") + "<b>" + game.name + "</b><br />";
-				if (game.started) {
-					if (game.startTime) html += "<b>Duration</b>: " + Tools.toDurationString(Date.now() - game.startTime) + "<br />";
-					const remainingPlayers = game.getRemainingPlayerCount();
-					if (remainingPlayers !== game.playerCount) {
-						html += "<b>Remaining players</b>: " + remainingPlayers + "/" + game.playerCount;
-					} else {
-						html += "<b>Players</b>: " + remainingPlayers;
-					}
-				} else {
-					html += "<b>Signups duration</b>: " + Tools.toDurationString(Date.now() - game.signupsTime) + "<br />";
-					html += "<b>" + game.playerCount + "</b> player" + (game.playerCount === 1 ? " has" : "s have") + " joined";
-				}
-				this.sayHtml(html, gameRoom);
-			} else if (gameRoom.userHostedGame) {
-				const game = gameRoom.userHostedGame;
-				let html = (game.mascot ? Dex.getPokemonIcon(game.mascot, true) : "") + "<b>" + game.name + "</b><br />";
-				html += "<b>Remaining time</b>: " + Tools.toDurationString(game.endTime - Date.now()) + "<br />";
-				if (game.started) {
-					if (game.startTime) html += "<b>Duration</b>: " + Tools.toDurationString(Date.now() - game.startTime) + "<br />";
-					html += "<b>Players</b>: " + game.getRemainingPlayerCount();
-				} else {
-					html += "<b>Signups duration</b>: " + Tools.toDurationString(Date.now() - game.signupsTime) + "<br />";
-					html += "<b>" + game.playerCount + "</b> player" + (game.playerCount === 1 ? " has" : "s have") + " joined";
-				}
-				this.sayHtml(html, gameRoom);
-			} else {
-				this.say("There is no scripted game running.");
-			}
-		},
-	},
-	pastgames: {
-		command(target, room, user) {
-			const targets = target.split(',');
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(targets[0]);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-				if (!Config.allowScriptedGames || !Config.allowScriptedGames.includes(targetRoom.id)) return this.sayError(['disabledGameFeatures', targetRoom.title]);
-				gameRoom = targetRoom;
-				targets.shift();
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				if (!Config.allowScriptedGames || !Config.allowScriptedGames.includes(room.id)) return this.sayError(['disabledGameFeatures', room.title]);
-				gameRoom = room;
-			}
-
-			const database = Storage.getDatabase(gameRoom);
-			if (!database.pastGames) return this.say("The past games list is empty.");
-			const names: string[] = [];
-			const option = Tools.toId(targets[0]);
-			const displayTimes = option === 'time' || option === 'times';
-			const now = Date.now();
-			for (let i = 0; i < database.pastGames.length; i++) {
-				const format = Games.getFormat(database.pastGames[i].inputTarget);
-				let game = Array.isArray(format) ? database.pastGames[i].name : format.nameWithOptions;
-
-				if (displayTimes) {
-					let duration = now - database.pastGames[i].time;
-					if (duration < 1000) duration = 1000;
-					game += " <i>(" + Tools.toDurationString(duration, {hhmmss: true}) + " ago)</i>";
-				}
-
-				names.push(game);
-			}
-			this.sayHtml("<b>Past games</b>" + (displayTimes ? "" : " (most recent first)") + ": " + Tools.joinList(names) + ".", gameRoom);
-		},
-	},
-	pastuserhostedgames: {
-		command(target, room, user) {
-			const targets = target.split(',');
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(targets[0]);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-				if (!Config.allowUserHostedGames || !Config.allowUserHostedGames.includes(targetRoom.id)) return this.sayError(['disabledUserHostedGameFeatures', targetRoom.title]);
-				gameRoom = targetRoom;
-				targets.shift();
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				if (!Config.allowUserHostedGames || !Config.allowUserHostedGames.includes(room.id)) return this.sayError(['disabledUserHostedGameFeatures', room.title]);
-				gameRoom = room;
-			}
-
-			const database = Storage.getDatabase(gameRoom);
-			if (!database.pastUserHostedGames) return this.say("The past user-hosted games list is empty.");
-			const names: string[] = [];
-			const option = Tools.toId(targets[0]);
-			const displayTimes = option === 'time' || option === 'times';
-			const now = Date.now();
-			for (let i = 0; i < database.pastUserHostedGames.length; i++) {
-				const format = Games.getUserHostedFormat(database.pastUserHostedGames[i].inputTarget);
-				let game = Array.isArray(format) ? database.pastUserHostedGames[i].name : format.name;
-
-				if (displayTimes) {
-					let duration = now - database.pastUserHostedGames[i].time;
-					if (duration < 1000) duration = 1000;
-					game += " <i>(" + Tools.toDurationString(duration, {hhmmss: true}) + " ago)</i>";
-				}
-
-				names.push(game);
-			}
-			this.sayHtml("<b>Past user-hosted games</b>" + (displayTimes ? "" : " (most recent first)") + ": " + Tools.joinList(names) + ".", gameRoom);
-		},
-		aliases: ['pastuserhosts', 'pasthosts'],
-	},
-	lastgame: {
-		command(target, room, user) {
-			const targets = target.split(',');
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(targets[0]);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-				targets.shift();
-				if (!Config.allowScriptedGames || !Config.allowScriptedGames.includes(targetRoom.id)) return this.sayError(['disabledGameFeatures', targetRoom.title]);
-				gameRoom = targetRoom;
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				if (!Config.allowScriptedGames || !Config.allowScriptedGames.includes(room.id)) return this.sayError(['disabledGameFeatures', room.title]);
-				gameRoom = room;
-			}
-
-			const database = Storage.getDatabase(gameRoom);
-			if (!targets[0]) {
-				if (!database.lastGameTime) return this.say("No scripted games have been played in " + gameRoom.title + ".");
-				return this.say("The last scripted game in " + gameRoom.title + " ended **" + Tools.toDurationString(Date.now() - database.lastGameTime) + "** ago.");
-			}
-			const format = Games.getFormat(targets[0]);
-			if (Array.isArray(format)) return this.sayError(format);
-			if (!database.lastGameFormatTimes || !(format.id in database.lastGameFormatTimes)) return this.say(format.name + " has not been played in " + gameRoom.title + ".");
-			this.say("The last game of " + format.name + " in " + gameRoom.title + " ended **" + Tools.toDurationString(Date.now() - database.lastGameFormatTimes[format.id]) + "** ago.");
-		},
-	},
-	lastuserhostedgame: {
-		command(target, room, user) {
-			const targets = target.split(',');
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(targets[0]);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-				targets.shift();
-				if (!Config.allowUserHostedGames || !Config.allowUserHostedGames.includes(targetRoom.id)) return this.sayError(['disabledUserHostedGameFeatures', targetRoom.title]);
-				gameRoom = targetRoom;
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				if (!Config.allowUserHostedGames || !Config.allowUserHostedGames.includes(room.id)) return this.sayError(['disabledUserHostedGameFeatures', room.title]);
-				gameRoom = room;
-			}
-
-			const database = Storage.getDatabase(gameRoom);
-			if (!targets[0]) {
-				if (!database.lastUserHostedGameTime) return this.say("No user-hosted games have been played in " + gameRoom.title + ".");
-				return this.say("The last user-hosted game in " + gameRoom.title + " ended **" + Tools.toDurationString(Date.now() - database.lastUserHostedGameTime) + "** ago.");
-			}
-			const format = Games.getUserHostedFormat(targets[0]);
-			if (Array.isArray(format)) return this.sayError(format);
-			if (!database.lastUserHostedGameFormatTimes || !(format.id in database.lastUserHostedGameFormatTimes)) return this.say(format.name + " has not been hosted in " + gameRoom.title + ".");
-			this.say("The last user-hosted game of " + format.name + " in " + gameRoom.title + " ended **" + Tools.toDurationString(Date.now() - database.lastUserHostedGameFormatTimes[format.id]) + "** ago.");
-		},
-		aliases: ['lastuserhost', 'lasthost'],
-	},
-	host: {
-		command(target, room, user) {
-			if (this.isPm(room)) return;
-			const database = Storage.getDatabase(room);
-			const approvedHost = database.userHostStatuses && database.userHostStatuses[user.id] === 'approved' ? true : false;
-			if (!user.hasRank(room, 'voice') && !approvedHost) return;
-			if (!Config.allowUserHostedGames || !Config.allowUserHostedGames.includes(room.id)) return this.sayError(['disabledUserHostedGameFeatures', room.title]);
-			if (!Users.self.hasRank(room, 'bot')) return this.sayError(['missingBotRankForFeatures', 'user-hosted game']);
-
-			const targets = target.split(",");
-			const host = Users.get(targets[0]);
-			if (!host || !host.rooms.has(room)) return this.say("Please specify a user currently in this room.");
-			if (approvedHost && user !== host) return user.say("You are only able to use this command on yourself as approved host.");
-			targets.shift();
-
-			const format = Games.getUserHostedFormat(targets.join(","), user);
-			if (Array.isArray(format)) return this.sayError(format);
-			if (Games.reloadInProgress) return this.sayError(['reloadInProgress']);
-
-			if (!approvedHost && database.userHostStatuses && host.id in database.userHostStatuses) {
-				if (database.userHostStatuses[host.id] === 'unapproved') {
-					return this.say(host.name + " is currently unapproved for hosting games.");
-				} else if (database.userHostStatuses[host.id] === 'novice') {
-					const gameHostingDifficulty = Config.userHostedGameHostDifficulties && format.id in Config.userHostedGameHostDifficulties ? Config.userHostedGameHostDifficulties[format.id] : 'medium';
-					if (gameHostingDifficulty !== 'easy') return this.say(host.name + " is currently unapproved for hosting '" + gameHostingDifficulty + "' games such as " + format.name + ".");
-				}
-			}
-
-			if (Config.userHostCooldownTimers && room.id in Config.userHostCooldownTimers && room.id in Games.lastUserHostTimes && host.id in Games.lastUserHostTimes[room.id]) {
-				const userHostCooldown = (Config.userHostCooldownTimers[room.id] * 60 * 1000) - (Date.now() - Games.lastUserHostTimes[room.id][host.id]);
-				if (userHostCooldown > 1000) {
-					const durationString = Tools.toDurationString(userHostCooldown);
-					return this.say("There " + (durationString.endsWith('s') ? "are" : "is") + " still " + durationString + " of " + host.name + "'s host cooldown remaining.");
-				}
-			}
-
-			const otherUsersQueued = database.userHostedGameQueue && database.userHostedGameQueue.length;
-			const remainingGameCooldown = Games.getRemainingGameCooldown(room);
-			const inCooldown = remainingGameCooldown > 1000;
-			const requiresScriptedGame = Games.requiresScriptedGame(room);
-			if (room.game || room.userHostedGame || otherUsersQueued || inCooldown || requiresScriptedGame) {
-				if (database.userHostedGameQueue) {
-					for (let i = 0; i < database.userHostedGameQueue.length; i++) {
-						if (Tools.toId(database.userHostedGameQueue[i].name) === host.id) {
-							if (Games.getExistingUserHostedFormat(database.userHostedGameQueue[i].format).name === format.name && !format.inputTarget.includes(',')) return this.say(host.name + " is already in the host queue for " + format.name + ".");
-							database.userHostedGameQueue[i].format = format.inputTarget;
-							return this.say(host.name + "'s game was changed to " + format.name + ".");
-						}
-					}
-				} else {
-					database.userHostedGameQueue = [];
-				}
-				if (Config.maxQueuedUserHostedGames && room.id in Config.maxQueuedUserHostedGames && database.userHostedGameQueue.length >= Config.maxQueuedUserHostedGames[room.id]) {
-					return this.say("The host queue is full.");
-				}
-
-				let reason = '';
-				if (!room.game && !room.userHostedGame) {
-					if (otherUsersQueued) {
-						reason = (database.userHostedGameQueue.length === 1 ? "Another host is" : database.userHostedGameQueue.length + " other hosts are") + " currently queued";
-					} else if (inCooldown) {
-						const durationString = Tools.toDurationString(remainingGameCooldown);
-						reason = "There " + (durationString.endsWith('s') ? "are" : "is") + " still " + durationString + " of the game cooldown remaining";
-					} else if (requiresScriptedGame) {
-						reason = "At least 1 scripted game needs to be played before the next user-hosted game can start";
-					}
-				}
-				this.say((reason ? reason + " so " : "") + host.name + " was added to the host queue.");
-				database.userHostedGameQueue.push({
-					format: format.inputTarget,
-					id: host.id,
-					name: host.name,
-				});
-				Storage.exportDatabase(room.id);
-				return;
-			}
-			const game = Games.createUserHostedGame(room, format, host);
-			game.signups();
-		},
-	},
-	nexthost: {
-		command(target, room, user) {
-			if (this.isPm(room) || !user.hasRank(room, 'voice') || room.game || room.userHostedGame) return;
-			if (!Config.allowUserHostedGames || !Config.allowUserHostedGames.includes(room.id)) return this.sayError(['disabledUserHostedGameFeatures', room.title]);
-			if (!Users.self.hasRank(room, 'bot')) return this.sayError(['missingBotRankForFeatures', 'user-hosted game']);
-			if (Games.requiresScriptedGame(room)) {
-				this.say("At least 1 scripted game needs to be played before the next user-hosted game can start.");
-				return;
-			}
-			const database = Storage.getDatabase(room);
-			if (!database.userHostedGameQueue || !database.userHostedGameQueue.length) return this.sayError(['emptyUserHostedGameQueue']);
-			const remainingGameCooldown = Games.getRemainingGameCooldown(room);
-			if (remainingGameCooldown > 1000) {
-				const durationString = Tools.toDurationString(remainingGameCooldown);
-				this.say("There " + (durationString.endsWith('s') ? "are" : "is") + " still " + durationString + " of the game cooldown remaining.");
-				return;
-			}
-			const nextHost = database.userHostedGameQueue[0];
-			const format = Games.getUserHostedFormat(nextHost.format, user);
-			if (Array.isArray(format)) return this.sayError(format);
-			if (Games.reloadInProgress) return this.sayError(['reloadInProgress']);
-			database.userHostedGameQueue.shift();
-			const game = Games.createUserHostedGame(room, format, nextHost.name);
-			game.signups();
-			Storage.exportDatabase(room.id);
-		},
-	},
-	hostqueue: {
-		command(target, room, user) {
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(target);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', target]);
-				gameRoom = targetRoom;
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				gameRoom = room;
-			}
-			const database = Storage.getDatabase(gameRoom);
-			if (!database.userHostedGameQueue || !database.userHostedGameQueue.length) return this.sayError(['emptyUserHostedGameQueue']);
-			const html = [];
-			for (let i = 0; i < database.userHostedGameQueue.length; i++) {
-				let name = database.userHostedGameQueue[i].name;
-				const user = Users.get(database.userHostedGameQueue[i].name);
-				if (user) name = user.name;
-				html.push("<b>" + (i + 1) + "</b>: " + name + " (" + Games.getExistingUserHostedFormat(database.userHostedGameQueue[i].format).name + ")");
-			}
-			this.sayHtml("<b>Host queue</b>:<br><br>" + html.join("<br>"), gameRoom);
-		},
-		aliases: ['hq'],
-	},
-	hosttime: {
-		command(target, room, user) {
-			if (!this.isPm(room)) return;
-			const targetRoom = Rooms.search(target);
-			if (!targetRoom) return this.sayError(['invalidBotRoom', target]);
-			if (Config.userHostCooldownTimers && targetRoom.id in Config.userHostCooldownTimers && targetRoom.id in Games.lastUserHostTimes && user.id in Games.lastUserHostTimes[targetRoom.id]) {
-				const userHostCooldown = (Config.userHostCooldownTimers[targetRoom.id] * 60 * 1000) - (Date.now() - Games.lastUserHostTimes[targetRoom.id][user.id]);
-				if (userHostCooldown > 1000) {
-					const durationString = Tools.toDurationString(userHostCooldown);
-					this.say("There " + (durationString.endsWith('s') ? "are" : "is") + " still " + durationString + " of your host cooldown remaining.");
-				} else {
-					this.say("Your host cooldown has ended.");
-				}
-			} else {
-				this.say("You do not have a host cooldown.");
-			}
-		},
-		aliases: ['ht'],
-	},
-	dehost: {
-		command(target, room, user) {
-			if (this.isPm(room)) return;
-			const database = Storage.getDatabase(room);
-			const approvedHost = database.userHostStatuses && database.userHostStatuses[user.id] === 'approved' ? true : false;
-			if (!user.hasRank(room, 'voice') && !approvedHost) return;
-			const id = Tools.toId(target);
-			if (approvedHost && id !== user.id) return user.say("You are only able to use this command on yourself as approved host.");
-			if (room.userHostedGame && room.userHostedGame.hostId === id) return this.run('endgame');
-			if (!database.userHostedGameQueue || !database.userHostedGameQueue.length) return this.sayError(['emptyUserHostedGameQueue']);
-			let position = -1;
-			for (let i = 0; i < database.userHostedGameQueue.length; i++) {
-				if (database.userHostedGameQueue[i].id === id) {
-					position = i;
-					break;
-				}
-			}
-			if (position === -1) return this.say(this.sanitizeResponse(target.trim() + " is not in the host queue."));
-			database.userHostedGameQueue.splice(position, 1);
-			this.say(this.sanitizeResponse(target.trim() + " was removed from the host queue."));
-			for (let i = position; i < database.userHostedGameQueue.length; i++) {
-				if (!database.userHostedGameQueue[i]) break;
-				const user = Users.get(database.userHostedGameQueue[i].name);
-				if (user) user.say("You are now #" + (i + 1) + " in the host queue.");
-			}
-			Storage.exportDatabase(room.id);
-		},
-		aliases: ['unhost'],
-	},
-	hoststatus: {
-		command(target, room, user) {
-			const targets = target.split(',');
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(targets[0]);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-				gameRoom = targetRoom;
-				targets.shift();
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				gameRoom = room;
-			}
-			let hostName = targets[0].trim();
-			let hostId: string;
-			const targetUser = Users.get(targets[0]);
-			if (targetUser) {
-				hostName = targetUser.name;
-				hostId = targetUser.id;
-			} else {
-				hostId = Tools.toId(hostName);
-			}
-
-			if (!hostId) return this.say("Please specify a user and optionally a new host status.");
-
-			const database = Storage.getDatabase(gameRoom);
-			if (targets.length > 1) {
-				if (!user.hasRank(gameRoom, 'driver')) return;
-				const status = Tools.toId(targets[1]);
-				if (status === 'standard') {
-					if (!database.userHostStatuses || !(hostId in database.userHostStatuses)) return this.say(hostName + "'s host status is already standard.");
-					delete database.userHostStatuses[hostId];
-					return this.say(hostName + "'s host status has been set to 'standard'.");
-				} else if (status === 'unapproved' || status === 'novice' || status === 'approved') {
-					if (!database.userHostStatuses) database.userHostStatuses = {};
-					database.userHostStatuses[hostId] = status;
-					return this.say(hostName + "'s host status has been set to '" + status + "'.");
-				}
-			} else {
-				if (!database.userHostStatuses || !(hostId in database.userHostStatuses)) return this.say(hostName + "'s host status is 'standard'.");
-				this.say(hostName + "'s host status is '" + database.userHostStatuses[hostId] + "'.");
-			}
-		},
-		aliases: ['hstatus'],
-	},
-	hoststatuslist: {
-		command(target, room, user) {
-			const targets = target.split(',');
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(targets[0]);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-				gameRoom = targetRoom;
-				targets.shift();
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				gameRoom = room;
-			}
-
-			const status = Tools.toId(targets[0]) as UserHostStatus;
-			if (status === 'unapproved' || status === 'novice' || status === 'approved') {
-				const list: string[] = [];
-				const database = Storage.getDatabase(gameRoom);
-				if (database.userHostStatuses) {
-					for (const i in database.userHostStatuses) {
-						if (database.userHostStatuses[i] === status) {
-							const host = Users.get(i);
-							list.push(host ? host.name : i);
-						}
-					}
-				}
-				if (!list.length) return this.say("There are no users with a host status of '" + status + "'.");
-				this.sayHtml("<b>Users with a host status of '" + status + "'</b>: " + list.join(", "), gameRoom);
-			} else {
-				return this.say("Please specify a valid host status (unapproved, novice, or approved).");
-			}
-		},
-		aliases: ['hstatuslist'],
-	},
-	randompick: {
-		command(target, room, user) {
-			if (!this.isPm(room) && !user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)) return;
-			const choices: string[] = [];
-			const targets = target.split(',');
-			for (let i = 0; i < targets.length; i++) {
-				if (Tools.toId(targets[i])) choices.push(targets[i].trim());
-			}
-			if (choices.length < 2) return this.say("You must specify at least 2 choices.");
-			this.say("**Random pick:** " + Tools.sampleOne(choices));
-		},
-		aliases: ['rpick'],
-	},
-	timer: {
-		command(target, room, user) {
-			if (this.isPm(room)) return;
-			if (!user.hasRank(room, 'voice')) {
-				if (room.userHostedGame && room.userHostedGame.hostId === user.id) return this.run('gametimer');
-				return;
-			}
-			const id = Tools.toId(target);
-			if (id === 'off' || id === 'end') {
-				if (!room.timers || !(user.id in room.timers)) return this.say("You do not have a timer running.");
-				clearTimeout(room.timers[user.id]);
-				delete room.timers[user.id];
-				return this.say("Your timer has been turned off.");
-			}
-
-			let time: number;
-			if (id.length === 1) {
-				time = parseInt(id) * 60;
-			} else {
-				time = parseInt(id);
-			}
-			if (isNaN(time) || time > 1800 || time < 5) return this.say("Please enter an amount of time between 5 seconds and 30 minutes.");
-			time *= 1000;
-
-			if (!room.timers) room.timers = {};
-			if (user.id in room.timers) clearTimeout(room.timers[user.id]);
-			room.timers[user.id] = setTimeout(() => {
-				room.say(user.name + ": time is up!");
-				delete room.timers![user.id];
-			}, time);
-			this.say("Your timer has been set for: " + Tools.toDurationString(time) + ".");
-		},
-	},
-	gametimer: {
-		command(target, room, user) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const id = Tools.toId(target);
-			if (id === 'off' || id === 'end') {
-				if (!room.userHostedGame.gameTimer) return this.say("There is no game timer running.");
-				clearTimeout(room.userHostedGame.gameTimer);
-				room.userHostedGame.gameTimer = null;
-				return this.say("The game timer has been turned off.");
-			}
-
-			let time: number;
-			if (id.length === 1) {
-				time = parseInt(id) * 60;
-			} else {
-				time = parseInt(id);
-			}
-			if (isNaN(time) || time > 600 || time < 5) return this.say("Please enter an amount of time between 5 seconds and 10 minutes.");
-			time *= 1000;
-
-			if (room.userHostedGame.gameTimer) clearTimeout(room.userHostedGame.gameTimer);
-			room.userHostedGame.gameTimer = setTimeout(() => {
-				room.say("Time is up!");
-				room.userHostedGame!.gameTimer = null;
-			}, time);
-			this.say("Game timer set for: " + Tools.toDurationString(time) + ".");
-		},
-		aliases: ['gtimer'],
-	},
-	gamecap: {
-		command(target, room, user) {
-			if (this.isPm(room)) return;
-			let game: Game | undefined;
-			const cap = parseInt(target);
-			if (room.game) {
-				if (!user.hasRank(room, 'voice')) return;
-				game = room.game;
-			} else if (room.userHostedGame) {
-				if (room.userHostedGame.hostId !== user.id) return;
-				game = room.userHostedGame;
-			}
-			if (!game) return;
-			if (isNaN(cap)) return this.say("You must specify a valid player cap.");
-			if (game.playerCount >= cap) return this.run('startgame');
-			game.playerCap = cap;
-			this.say("The game's player cap has been set to **" + cap + "**.");
-		},
-		aliases: ['gcap'],
-	},
-	addplayer: {
-		command(target, room, user) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const users = [];
-			const targets = target.split(",");
-			for (let i = 0; i < targets.length; i++) {
-				const user = Users.get(targets[i].trim());
-				if (!user) continue;
-				if (!room.userHostedGame.players[user.id] || (room.userHostedGame.players[user.id] && room.userHostedGame.players[user.id].eliminated)) users.push(user);
-			}
-			if (!users.length) return this.say("Please specify at least one user who is not already in the game.");
-			for (let i = 0; i < users.length; i++) {
-				if (room.userHostedGame.players[users[i].id]) {
-					room.userHostedGame.players[users[i].id].eliminated = false;
-				} else {
-					room.userHostedGame.createPlayer(users[i]);
-				}
-			}
-			this.say("Added " + Tools.joinList(users.map(x => x.name)) + " to the player list.");
-		},
-		aliases: ['apl', 'addplayers'],
-	},
-	removeplayer: {
-		command(target, room, user, cmd) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const users: string[] = [];
-			const targets = target.split(",");
-			for (let i = 0; i < targets.length; i++) {
-				const id = Tools.toId(targets[i]);
-				if (id && room.userHostedGame.players[id] && !room.userHostedGame.players[id].eliminated) users.push(room.userHostedGame.players[id].name);
-			}
-			if (!users.length) return this.say("Please specify at least one player who is still in the game.");
-			for (let i = 0; i < users.length; i++) {
-				room.userHostedGame.destroyPlayer(users[i]);
-			}
-			if (cmd !== 'silentelim' && cmd !== 'selim' && cmd !== 'srpl') this.run('players');
-		},
-		aliases: ['srpl', 'rpl', 'silentelim', 'selim', 'elim', 'eliminate', 'eliminateplayer', 'removeplayers'],
-	},
-	shuffleplayers: {
-		command(target, room, user) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const temp: {[k: string]: Player} = {};
-			const players = room.userHostedGame.shufflePlayers();
-			if (!players.length) return this.say("The player list is empty.");
-			for (let i = 0; i < players.length; i++) {
-				temp[players[i].id] = players[i];
-			}
-			room.userHostedGame.players = temp;
-			this.run('playerlist');
-		},
-		aliases: ['shufflepl', 'shuffle'],
-	},
-	playerlist: {
-		command(target, room, user) {
-			let gameRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(target);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', target]);
-				gameRoom = targetRoom;
-			} else {
-				if (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)) return;
-				gameRoom = room;
-			}
-			const game = gameRoom.game || gameRoom.userHostedGame;
-			if (!game) return;
-			const remainingPlayers = game.getRemainingPlayerCount();
-			if (!remainingPlayers) return this.say("**Players**: none");
-			this.say("**Players (" + remainingPlayers + ")**: " + (game.points ? game.getPlayerPoints() : game.getPlayerNames()));
-		},
-		aliases: ['players', 'pl'],
-	},
-	clearplayerlist: {
-		command(target, room, user) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const users: string[] = [];
-			for (const i in room.userHostedGame.players) {
-				if (!room.userHostedGame.players[i].eliminated) users.push(room.userHostedGame.players[i].name);
-			}
-			if (!users.length) return this.say("The player list is empty.");
-			this.run('removeplayer', users.join(", "));
-		},
-		aliases: ['clearplayers', 'clearpl'],
-	},
-	addpoints: {
-		command(target, room, user, cmd) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			if (!room.userHostedGame.started) return this.say("You must first start the game with ``" + Config.commandCharacter + "startgame``.");
-			if (target.includes("|")) {
-				this.runMultipleTargets("|");
-				return;
-			}
-			const users: User[] = [];
-			let points = 1;
-			const targets = target.split(",");
-			for (let i = 0; i < targets.length; i++) {
-				const target = Tools.toId(targets[i]);
-				if (!target) continue;
-				let user = Users.get(target);
-				if (Tools.isInteger(target)) {
-					points = Math.round(parseInt(target));
-					if (points < 1) points = 1;
-				} else {
-					user = Users.get(targets[i]);
-					if (user && user.rooms.has(room)) {
-						if (room.userHostedGame.players[user.id] && room.userHostedGame.savedWinners && room.userHostedGame.savedWinners.includes(room.userHostedGame.players[user.id])) {
-							return this.say("You cannot use this command on a saved winner.");
-						}
-						users.push(user);
-					}
-				}
-			}
-			if (!users.length) return this.say("Please specify at least one user in the room.");
-			if (cmd === 'removepoints' || cmd === 'removepoint' || cmd === 'rpt') points *= -1;
-			let reachedCap = 0;
-			for (let i = 0; i < users.length; i++) {
-				const player = room.userHostedGame.players[users[i].id] || room.userHostedGame.createPlayer(users[i]);
-				if (player.eliminated) player.eliminated = false;
-				let total = room.userHostedGame.points.get(player) || 0;
-				total += points;
-				room.userHostedGame.points.set(player, total);
-				if (room.userHostedGame.scoreCap && total >= room.userHostedGame.scoreCap) reachedCap++;
-			}
-			if (!this.runningMultipleTargets) this.run('playerlist');
-			if (reachedCap) user.say((reachedCap === 1 ? "A user has" : reachedCap + " users have") + " reached the score cap in your game.");
-		},
-		aliases: ['addpoint', 'removepoint', 'removepoints', 'apt', 'rpt'],
-	},
-	addpointall: {
-		command(target, room, user, cmd) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			if (!room.userHostedGame.started) return this.say("You must first start the game with ``" + Config.commandCharacter + "startgame``.");
-			if (target && !Tools.isInteger(target)) return this.say("You must specify a valid number of points.");
-			this.runningMultipleTargets = true;
-			const newCmd = cmd === 'aptall' || cmd === 'addpointall' ? 'addpoint' : 'removepoint';
-			const pointsString = target ? ", " + target : "";
-			for (const i in room.userHostedGame.players) {
-				if (room.userHostedGame.players[i].eliminated) continue;
-				const player = room.userHostedGame.players[i];
-				let expiredUser = false;
-				let user = Users.get(player.name);
-				if (!user) {
-					user = Users.add(player.name, player.id);
-					expiredUser = true;
-				}
-				this.run(newCmd, player.name + pointsString);
-				if (expiredUser) Users.remove(user);
-			}
-			this.runningMultipleTargets = false;
-			this.run('playerlist');
-		},
-		aliases: ['aptall', 'rptall', 'removepointall'],
-	},
-	movepoint: {
-		command(target, room, user) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const targets = target.split(",");
-			const from = Users.get(targets[0]);
-			const to = Users.get(targets[1]);
-			if (!from || !to || from === to) return this.say("You must specify 2 users.");
-			if (!(from.id in room.userHostedGame.players)) return this.say(from.name + " is not in the game.");
-			let fromPoints = room.userHostedGame.points.get(room.userHostedGame.players[from.id]);
-			if (!fromPoints) return this.say(from.name + " does not have any points.");
-			let amount: number;
-			if (targets.length === 3) {
-				amount = parseInt(targets[2]);
-				if (isNaN(amount)) return this.say("Please specify a valid amount of points.");
-				if (amount > fromPoints) amount = fromPoints;
-			} else {
-				amount = fromPoints;
-			}
-			const allPoints = amount === fromPoints;
-			fromPoints -= amount;
-			if (!fromPoints) {
-				room.userHostedGame.points.delete(room.userHostedGame.players[from.id]);
-			} else {
-				room.userHostedGame.points.set(room.userHostedGame.players[from.id], fromPoints);
-			}
-			room.userHostedGame.createPlayer(to);
-			let toPoints = room.userHostedGame.points.get(room.userHostedGame.players[to.id]) || 0;
-			toPoints += amount;
-			room.userHostedGame.points.set(room.userHostedGame.players[to.id], toPoints);
-			this.say((allPoints ? "" : amount + " of ") + from.name + "'s points have been moved to " + to.name + ". Their total is now " + toPoints + ".");
-		},
-		aliases: ['mpt'],
-	},
-	scorecap: {
-		command(target, room, user) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const id = Tools.toId(target);
-			if (!id) {
-				if (room.userHostedGame.scoreCap) return this.say("The score cap is set to " + room.userHostedGame.scoreCap + ".");
-				return this.say("There is no score cap set.");
-			}
-			const cap = parseInt(id);
-			if (isNaN(cap)) return this.say("Please specify a valid number.");
-			room.userHostedGame.scoreCap = cap;
-			this.say("The score cap has been set to " + cap + ".");
-		},
-	},
-	store: {
-		command(target, room, user, cmd) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			if (cmd === 'stored' || !target) {
-				if (!room.userHostedGame.storedMessage) return this.say("You must store a message first with ``" + Config.commandCharacter + "store``.");
-				if (room.userHostedGame.storedMessage.charAt(0) === Config.commandCharacter) {
-					const parts = room.userHostedGame.storedMessage.split(" ");
-					this.run(parts[0].substr(1), parts.slice(1).join(" "));
-					return;
-				}
-				this.say(room.userHostedGame.storedMessage);
-				return;
-			}
-			target = target.trim();
-			if (target.charAt(0) === '/' || (target.charAt(0) === '!' && target.trim().split(" ")[0] !== '!pick')) return this.say("You cannot store a command.");
-			room.userHostedGame.storedMessage = target;
-			this.say("Your message has been stored. You can now repeat it with ``" + Config.commandCharacter + "stored``.");
-		},
-		aliases: ['stored'],
-	},
-	twist: {
-		command(target, room, user) {
-			let gameRoom: Room;
-			let isPm = false;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(target);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', target]);
-				gameRoom = targetRoom;
-				isPm = true;
-			} else {
-				gameRoom = room;
-			}
-			if (!gameRoom.userHostedGame || (!isPm && gameRoom.userHostedGame.hostId !== user.id)) return;
-			if (!target) {
-				if (!gameRoom.userHostedGame.twist) return this.say("There is no twist set for the current game.");
-				this.say(gameRoom.userHostedGame.name + " twist: " + gameRoom.userHostedGame.twist);
-				return;
-			}
-			if (isPm) return;
-			gameRoom.userHostedGame.twist = target.trim();
-			this.say("Your twist has been stored. You can repeat it with ``" + Config.commandCharacter + "twist``.");
-		},
-	},
-	savewinner: {
-		command(target, room, user) {
-			if (this.isPm(room)) return;
-			if (!room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			if (!room.userHostedGame.savedWinners) room.userHostedGame.savedWinners = [];
-			const targets = target.split(",");
-			if (Config.maxUserHostedGameWinners && room.id in Config.maxUserHostedGameWinners) {
-				const totalStored = room.userHostedGame.savedWinners.length + targets.length;
-				if (totalStored > Config.maxUserHostedGameWinners[room.id]) return this.say("You cannot store more than " + Config.maxUserHostedGameWinners[room.id] + " winners.");
-				if (totalStored === Config.maxUserHostedGameWinners[room.id]) return this.say("You will reach the maximum amount of winners. Please use ``" + Config.commandCharacter + "win``.");
-			}
-			const stored = [];
-			for (let i = 0; i < targets.length; i++) {
-				const id = Tools.toId(targets[i]);
-				if (!(id in room.userHostedGame.players)) return this.say(this.sanitizeResponse(targets[i].trim() + " is not in the game."));
-				if (room.userHostedGame.savedWinners.includes(room.userHostedGame.players[id])) return this.say(room.userHostedGame.players[id].name + " has already been saved as a winner.");
-				stored.push(id);
-			}
-			for (let i = 0; i < stored.length; i++) {
-				const id = stored[i];
-				room.userHostedGame.savedWinners.push(room.userHostedGame.players[id]);
-				room.userHostedGame.points.delete(room.userHostedGame.players[id]);
-				room.userHostedGame.players[id].eliminated = true;
-			}
-			this.run('playerlist');
-		},
-		aliases: ['savewinners', 'storewinner', 'storewinners'],
-	},
-	removewinner: {
-		command(target, room, user) {
-			if (this.isPm(room)) return;
-			if (!room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const id = Tools.toId(target);
-			if (!(id in room.userHostedGame.players)) return this.say(this.sanitizeResponse(target.trim() + " is not in the game."));
-			if (!room.userHostedGame.savedWinners) room.userHostedGame.savedWinners = [];
-			const index = room.userHostedGame.savedWinners.indexOf(room.userHostedGame.players[id]);
-			if (index === -1) return this.say(this.sanitizeResponse(target.trim() + " has not been saved as a winner."));
-			room.userHostedGame.savedWinners.splice(index, 1);
-			room.userHostedGame.players[id].eliminated = false;
-			this.run('playerlist');
-		},
-		aliases: ['removestoredwinner'],
-	},
-	winner: {
-		command(target, room, user, cmd) {
-			if (this.isPm(room) || !room.userHostedGame || room.userHostedGame.hostId !== user.id) return;
-			const targets = target.split(",");
-			const savedWinners: Player[] | null = room.userHostedGame.savedWinners || null;
-			let players: Player[] = [];
-			const autoWin = cmd === 'autowin';
-			if (autoWin) {
-				let placesToWin = 1;
-				const possiblePlaces = parseInt(target);
-				if (!isNaN(possiblePlaces)) {
-					if (possiblePlaces < 1 || possiblePlaces > 3) return this.say("You can only auto-win the top 1-3 places.");
-					placesToWin = possiblePlaces;
-				}
-
-				const usersByPoints: Dict<Player[]> = {};
-				for (const i in room.userHostedGame.players) {
-					const player = room.userHostedGame.players[i];
-					if (player.eliminated || !room.userHostedGame.points.has(player)) continue;
-					const points = '' + room.userHostedGame.points.get(player);
-					if (!(points in usersByPoints)) usersByPoints[points] = [];
-					usersByPoints[points].push(player);
-				}
-
-				const sortedPoints = Object.keys(usersByPoints).sort((a, b) => parseInt(b) - parseInt(a));
-				for (let i = 0; i < placesToWin; i++) {
-					if (!sortedPoints[i]) break;
-					players = players.concat(usersByPoints[sortedPoints[i]]);
-				}
-			} else {
-				for (let i = 0; i < targets.length; i++) {
-					const id = Tools.toId(targets[i]);
-					if (!id) continue;
-					if (id in room.userHostedGame.players) {
-						const player = room.userHostedGame.players[id];
-						if (!players.includes(player) && !(savedWinners && savedWinners.includes(player))) players.push(player);
-					}
-				}
-			}
-
-			if (savedWinners) players = players.concat(savedWinners);
-			if (!players.length) return this.say(autoWin ? "No one has any points in this game." : "Please specify at least 1 player.");
-
-			let playerDifficulty: GameDifficulty;
-			if (Config.userHostedGamePlayerDifficulties && room.userHostedGame.format.id in Config.userHostedGamePlayerDifficulties) {
-				playerDifficulty = Config.userHostedGamePlayerDifficulties[room.userHostedGame.format.id];
-			} else if (Config.scriptedGameDifficulties && room.userHostedGame.format.id in Config.scriptedGameDifficulties) {
-				playerDifficulty = Config.scriptedGameDifficulties[room.userHostedGame.format.id];
-			} else {
-				playerDifficulty = 'medium';
-			}
-
-			let playerBits = 300;
-			if (playerDifficulty === 'medium') {
-				playerBits = 400;
-			} else if (playerDifficulty === 'hard') {
-				playerBits = 500;
-			}
-
-			if (room.userHostedGame.shinyMascot) playerBits *= 2;
-
-			for (let i = 0; i < players.length; i++) {
-				Storage.addPoints(room, players[i].name, playerBits, 'userhosted');
-				players[i].say("You were awarded " + playerBits + " bits! To see your total amount, use this command: ``" + Config.commandCharacter + "bits " + room.title + "``");
-			}
-			this.say("The winner" + (players.length === 1 ? " is" : "s are") + " " + players.map(x => x.name).join(", ") + "!");
-			room.userHostedGame.end();
-		},
-		aliases: ['autowin', 'win'],
-	},
-	roll: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			this.say('!roll ' + (target || "2"));
-		},
-	},
-	dt: {
-		command(target, room, user) {
-			if (!target || (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id))))) return;
-			this.say('!dt ' + target);
-		},
-	},
-	randompokemon: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			if (!target) {
-				const species = Dex.getExistingPokemon(Tools.sampleOne(Object.keys(Dex.data.pokedex))).species;
-				if (this.pm) {
-					this.say('Randomly generated Pokemon: **' + species + '**');
-				} else {
-					this.say('!dt ' + species);
-				}
-				return;
-			}
-			this.say("!randpoke " + target);
-		},
-		aliases: ['rpoke', 'rpokemon', 'randpoke'],
-	},
-	randommove: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			const move = Dex.getExistingMove(Tools.sampleOne(Object.keys(Dex.data.moves))).name;
-			if (this.pm) {
-				this.say('Randomly generated move: **' + move + '**');
-			} else {
-				this.say('!dt ' + move);
-			}
-		},
-		aliases: ['rmove', 'randmove'],
-	},
-	randomitem: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			const item = Dex.getExistingItem(Tools.sampleOne(Object.keys(Dex.data.items))).name;
-			if (this.pm) {
-				this.say('Randomly generated item: **' + item + '**');
-			} else {
-				this.say('!dt ' + item);
-			}
-		},
-		aliases: ['ritem', 'randitem'],
-	},
-	randomability: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			const abilities = Object.keys(Dex.data.abilities);
-			let ability = Dex.getExistingAbility(Tools.sampleOne(abilities));
-			while (ability.id === 'noability') {
-				ability = Dex.getExistingAbility(Tools.sampleOne(abilities));
-			}
-			if (this.pm) {
-				this.say('Randomly generated ability: **' + ability.name + '**');
-			} else {
-				this.say('!dt ' + ability.name);
-			}
-		},
-		aliases: ['rability', 'randability'],
-	},
-	randomtype: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			const types = Object.keys(Dex.data.typeChart);
-			let type = Tools.sampleOne(types);
-			if (Tools.random(2)) {
-				types.splice(types.indexOf(type), 1);
-				type += "/" + Tools.sampleOne(types);
-			}
-			this.say('Randomly generated type: **' + type + '**');
-		},
-		aliases: ['rtype', 'randtype'],
-	},
-	randomexistingtype: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			let type = '';
-			const pokedex = Dex.getPokemonList();
-			for (let i = 0; i < pokedex.length; i++) {
-				const pokemon = pokedex[i];
-				if (!pokemon.forme) {
-					type = pokemon.types.join('/');
-					break;
-				}
-			}
-			this.say('Randomly generated existing type: **' + type + '**');
-		},
-		aliases: ['rextype', 'randextype', 'rexistingtype', 'randexistingtype'],
-	},
-	randomcharacter: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			this.say('Randomly generated character: **' + Tools.sampleOne(Dex.data.characters).trim() + '**');
-		},
-		aliases: ['rchar', 'rcharacter', 'randchar', 'randcharacter'],
-	},
-	randomlocation: {
-		command(target, room, user) {
-			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice') && !(room.userHostedGame && room.userHostedGame.hostId === user.id)))) return;
-			this.say('Randomly generated location: **' + Tools.sampleOne(Dex.data.locations).trim() + '**');
-		},
-		aliases: ['rlocation', 'rloc', 'randloc', 'randlocation'],
 	},
 
 	/**
@@ -1547,7 +1169,7 @@ const commands: Dict<ICommandDefinition> = {
 
 			if (!tournamentRoom.tournament) return this.say("A tournament is not in progress in this room.");
 			if (tournamentRoom.tournament.generator !== 1) return this.say("This command is currently only usable in Single Elimination tournaments.");
-			const id = Tools.toId(targets[0]);
+			const id = toID(targets[0]);
 			if (!(id in tournamentRoom.tournament.players)) return this.say("'" + targets[0] + "' is not a player in the " + tournamentRoom.title + " tournament.");
 			const targetPlayer = tournamentRoom.tournament.players[id];
 			if (targetPlayer.eliminated) return this.say(targetPlayer.name + " has already been eliminated from the " + tournamentRoom.title + " tournament.");
@@ -1618,7 +1240,7 @@ const commands: Dict<ICommandDefinition> = {
 			}
 			const month = parseInt(targets[0]);
 			if (isNaN(month)) return this.say("You must specify the month (1-12).");
-			const schedule = Tournaments.getTournamentScheduleHtml(tournamentRoom, month);
+			const schedule = Tournaments.getTournamentScheduleHtml(tournamentRoom);
 			if (!schedule) return this.say("No tournament schedule found for " + tournamentRoom.title + ".");
 			this.sayCommand("!code " + schedule);
 		},
@@ -1640,7 +1262,7 @@ const commands: Dict<ICommandDefinition> = {
 			}
 			if (target.includes('@@@')) return this.say("You must specify custom rules separately (``" + Config.commandCharacter + cmd + " format, cap, custom rules``).");
 			const targets = target.split(',');
-			const id = Tools.toId(targets[0]);
+			const id = toID(targets[0]);
 			let scheduled = false;
 			let format: IFormat | null = null;
 			if (id === 'scheduled' || id === 'official') {
@@ -1778,7 +1400,7 @@ const commands: Dict<ICommandDefinition> = {
 			if (!database.pastTournaments) return this.say("The past tournament list is empty.");
 
 			const names: string[] = [];
-			const option = Tools.toId(targets[0]);
+			const option = toID(targets[0]);
 			const displayTimes = option === 'time' || option === 'times';
 			const now = Date.now();
 			for (let i = 0; i < database.pastTournaments.length; i++) {
@@ -1882,7 +1504,7 @@ const commands: Dict<ICommandDefinition> = {
 				delete targetRoom.newUserHostedTournaments[bracketLink];
 
 				targetRoom.approvedUserHostedTournaments[bracketLink].approvalStatus = 'approved';
-				targetRoom.approvedUserHostedTournaments[bracketLink].reviewer = Tools.toId(authOrTHC);
+				targetRoom.approvedUserHostedTournaments[bracketLink].reviewer = toID(authOrTHC);
 
 				this.say("Roomauth and THC winners are free to advertise without using this command!");
 			} else {
@@ -1999,13 +1621,13 @@ const commands: Dict<ICommandDefinition> = {
 			if (targets.length < 2) return this.say("You must specify a user and a message to send.");
 			if (Users.get(targets[0])) return this.say("You can only send messages to offline users.");
 			const recipient = targets[0].trim();
-			const recipientId = Tools.toId(recipient);
+			const recipientId = toID(recipient);
 			if (recipientId === 'constructor') return;
 			if (!Tools.isUsernameLength(recipient)) return this.sayError(['invalidUsernameLength']);
 			if (recipientId === user.id || recipientId.startsWith('guest')) return this.say("You must specify a user other than yourself or a guest.");
 			const message = targets.slice(1).join(',').trim();
 			if (!message.length) return this.say("You must specify a message to send.");
-			const maxMessageLength = Storage.getMaxOfflineMessageLength(user);
+			const maxMessageLength = Storage.getMaxOfflineMessageLength(user, message);
 			if (message.length > maxMessageLength) return this.say("Your message cannot exceed " + maxMessageLength + " characters.");
 			if (!Storage.storeOfflineMessage(user.name, recipientId, message)) return this.say("Sorry, you have too many messages queued for " + recipient + ".");
 			this.say("Your message has been sent to " + recipient + ".");
@@ -2027,21 +1649,6 @@ const commands: Dict<ICommandDefinition> = {
 		},
 		aliases: ['deleteofflinemessages', 'clearmail', 'deletemail'],
 	},
-	lastseen: {
-		command(target, room, user) {
-			if (!this.isPm(room)) return;
-			const targetUser = Users.get(target);
-			if (targetUser) return this.say(targetUser.name + " is currently online.");
-			const id = Tools.toId(target);
-			if (id === 'constructor') return;
-			if (!Tools.isUsernameLength(id)) return this.sayError(['invalidUsernameLength']);
-			if (id.startsWith('guest')) return this.say("Guest users cannot be tracked.");
-			const database = Storage.getGlobalDatabase();
-			if (!database.lastSeen || !(id in database.lastSeen)) return this.say(this.sanitizeResponse(target.trim() + " has not visited any of " + Users.self.name + "'s rooms in the past " + Storage.lastSeenExpirationDuration + "."));
-			return this.say(this.sanitizeResponse(target.trim() + " last visited one of " + Users.self.name + "'s rooms **" + Tools.toDurationString(Date.now() - database.lastSeen[id]) + "** ago."));
-		},
-		aliases: ['seen'],
-	},
 	addbits: {
 		command(target, room, user, cmd) {
 			if (this.isPm(room) || ((!Config.allowScriptedGames || !Config.allowScriptedGames.includes(room.id)) && (!Config.allowUserHostedGames || !Config.allowUserHostedGames.includes(room.id))) ||
@@ -2055,7 +1662,7 @@ const commands: Dict<ICommandDefinition> = {
 			const removeBits = cmd === 'removebits' || cmd === 'rbits';
 			let customBits: number | null = null;
 			for (let i = 0; i < targets.length; i++) {
-				const id = Tools.toId(targets[i]);
+				const id = toID(targets[i]);
 				if (!id) continue;
 				if (Tools.isInteger(id)) {
 					customBits = parseInt(targets[i].trim());
@@ -2085,7 +1692,7 @@ const commands: Dict<ICommandDefinition> = {
 					Storage.removePoints(room, users[i], bits, 'manual');
 				} else {
 					Storage.addPoints(room, users[i], bits, 'manual');
-					if (user && user.rooms.has(room)) user.say("You were awarded " + bits + " bits! To see your total amount, use this command: ``" + Config.commandCharacter + "rank " + room.title + "``");
+					if (user && user.rooms.has(room)) user.say("You were awarded " + bits + " bits! To see your total amount, use this command: ``" + commandCharacter + "rank " + room.title + "``");
 				}
 			}
 
@@ -2097,240 +1704,6 @@ const commands: Dict<ICommandDefinition> = {
 			}
 		},
 		aliases: ['abits', 'removebits', 'rbits'],
-	},
-	leaderboard: {
-		command(target, room, user) {
-			const targets = target.split(',');
-			let leaderboardRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(targets[0]);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-				targets.shift();
-				leaderboardRoom = targetRoom;
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				leaderboardRoom = room;
-			}
-			const database = Storage.getDatabase(leaderboardRoom);
-			if (!database.leaderboard) return this.say("There is no leaderboard for the " + leaderboardRoom.title + " room.");
-			let users = Object.keys(database.leaderboard);
-			let startPosition = 0;
-			let source: IFormat | IGameFormat | undefined;
-			let annual = false;
-			for (let i = 0; i < targets.length; i++) {
-				const id = Tools.toId(targets[i]);
-				if (Tools.isInteger(id)) {
-					if (startPosition) return this.say("You can only specify 1 position on the leaderboard.");
-					startPosition = parseInt(id);
-				} else if (id === 'annual' || id === 'alltime') {
-					annual = true;
-				} else {
-					const format = Dex.getFormat(targets[i]);
-					if (format && format.effectType === 'Format') {
-						if (source) return this.say("You can only specify 1 point source.");
-						source = format;
-					} else {
-						const gameFormat = Games.getFormat(targets[i]);
-						if (!Array.isArray(gameFormat)) {
-							if (source) return this.say("You can only specify 1 point source.");
-							source = gameFormat;
-						}
-					}
-				}
-			}
-
-			if (startPosition) {
-				if (startPosition > users.length) startPosition = users.length;
-				startPosition -= 10;
-				if (startPosition < 0) startPosition = 0;
-			}
-
-			const pointsCache: Dict<number> = {};
-
-			if (annual && source) {
-				for (let i = 0; i < users.length; i++) {
-					let points = 0;
-					if (database.leaderboard[users[i]].sources[source.id]) points += database.leaderboard[users[i]].sources[source.id];
-					if (database.leaderboard[users[i]].annualSources[source.id]) points += database.leaderboard[users[i]].annualSources[source.id];
-					pointsCache[users[i]] = points;
-				}
-			} else if (annual) {
-				for (let i = 0; i < users.length; i++) {
-					pointsCache[users[i]] = database.leaderboard[users[i]].annual + database.leaderboard[users[i]].current;
-				}
-			} else if (source) {
-				for (let i = 0; i < users.length; i++) {
-					pointsCache[users[i]] = database.leaderboard[users[i]].sources[source.id] || 0;
-				}
-			} else {
-				for (let i = 0; i < users.length; i++) {
-					pointsCache[users[i]] = database.leaderboard[users[i]].current;
-				}
-			}
-
-			users = users.filter(x => pointsCache[x] !== 0).sort((a, b) => pointsCache[b] - pointsCache[a]);
-			if (!users.length) return this.say("The " + leaderboardRoom.title + " leaderboard is empty.");
-
-			const output: string[] = [];
-			let positions = 0;
-			for (let i = startPosition; i < users.length; i++) {
-				if (!users[i]) break;
-				const points = pointsCache[users[i]] || database.leaderboard[users[i]].current;
-				const position = '' + (i + 1);
-				if (position.endsWith('1') && !position.endsWith('11')) {
-					output.push(position + "st: __" + database.leaderboard[users[i]].name + "__ (" + points + ")");
-				} else if (position.endsWith('2') && !position.endsWith('12')) {
-					output.push(position + "nd: __" + database.leaderboard[users[i]].name + "__ (" + points + ")");
-				} else if (position.endsWith('3') && !position.endsWith('13')) {
-					output.push(position + "rd: __" + database.leaderboard[users[i]].name + "__ (" + points + ")");
-				} else {
-					output.push(position + "th: __" + database.leaderboard[users[i]].name + "__ (" + points + ")");
-				}
-				positions++;
-				if (positions >= 10) break;
-			}
-			let endPosition = startPosition + 10;
-			if (endPosition > users.length) endPosition = users.length;
-			this.say("``" + (annual ? "Annual " : "") + (source ? source.name + " " : "") + "Top " + endPosition + " of " + users.length + "``: " + output.join(", "));
-		},
-		aliases: ['lb', 'top'],
-	},
-	rank: {
-		command(target, room, user) {
-			if (!this.isPm(room)) return;
-			const targets = target.split(',');
-			const targetRoom = Rooms.search(targets[0]);
-			if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-			targets.shift();
-			const database = Storage.getDatabase(targetRoom);
-			if (!database.leaderboard) return this.say("There is no leaderboard for the " + targetRoom.title + " room.");
-			const users = Object.keys(database.leaderboard);
-			if (!users.length) return this.say("The " + targetRoom.title + " leaderboard is empty.");
-			let targetUser = '';
-			let position = 0;
-			let source: IFormat | IGameFormat | undefined;
-			for (let i = 0; i < targets.length; i++) {
-				const id = Tools.toId(targets[i]);
-				if (Tools.isInteger(id)) {
-					if (position) return this.say("You can only specify 1 position on the leaderboard.");
-					position = parseInt(id);
-				} else {
-					const format = Dex.getFormat(targets[i]);
-					if (format && format.effectType === 'Format') {
-						if (source) return this.say("You can only specify 1 point source.");
-						source = format;
-					} else {
-						const gameFormat = Games.getFormat(targets[i]);
-						if (!Array.isArray(gameFormat)) {
-							if (source) return this.say("You can only specify 1 point source.");
-							source = gameFormat;
-						} else {
-							targetUser = id;
-						}
-					}
-				}
-			}
-
-			if (targetUser && position) return this.say("You cannot specify both a username and a position.");
-
-			const bits = (Config.allowScriptedGames && Config.allowScriptedGames.includes(targetRoom.id)) || (Config.allowUserHostedGames && Config.allowUserHostedGames.includes(targetRoom.id));
-			const currentPointsCache: Dict<number> = {};
-			const annualPointsCache: Dict<number> = {};
-			if (source) {
-				for (let i = 0; i < users.length; i++) {
-					let annualPoints = 0;
-					if (database.leaderboard[users[i]].sources[source.id]) annualPoints += database.leaderboard[users[i]].sources[source.id];
-					if (database.leaderboard[users[i]].annualSources[source.id]) annualPoints += database.leaderboard[users[i]].annualSources[source.id];
-					annualPointsCache[users[i]] = annualPoints;
-					currentPointsCache[users[i]] = database.leaderboard[users[i]].sources[source.id] || 0;
-				}
-			} else {
-				for (let i = 0; i < users.length; i++) {
-					annualPointsCache[users[i]] = database.leaderboard[users[i]].annual + database.leaderboard[users[i]].current;
-					currentPointsCache[users[i]] = database.leaderboard[users[i]].current;
-				}
-			}
-			const current = users.filter(x => currentPointsCache[x] !== 0).sort((a, b) => currentPointsCache[b] - currentPointsCache[a]);
-			const annual = users.filter(x => annualPointsCache[x] !== 0).sort((a, b) => annualPointsCache[b] - annualPointsCache[a]);
-
-			const results: string[] = [];
-			if (position) {
-				const index = position - 1;
-				if (current[index]) {
-					results.push("#" + position + " on the " + targetRoom.title + " " + (source ? source.name + " " : "") + "leaderboard is " + database.leaderboard[current[index]].name + " with " + (currentPointsCache[current[index]] || database.leaderboard[current[index]].current) + " " + (bits ? "bits" : "points") + ".");
-				}
-				if (annual[index]) {
-					results.push("#" + position + " on the annual " + targetRoom.title + " " + (source ? source.name + " " : "") + "leaderboard is " + database.leaderboard[annual[index]].name + " with " + annualPointsCache[annual[index]] + " " + (bits ? "bits" : "points") + ".");
-				}
-				if (!results.length) return this.say("No one is #" + position + " on the " + targetRoom.title + " " + (source ? source.name + " " : "") + "leaderboard.");
-			} else {
-				if (!targetUser) targetUser = user.id;
-				const self = targetUser === user.id;
-				const currentIndex = current.indexOf(targetUser);
-				const annualIndex = annual.indexOf(targetUser);
-				if (currentIndex !== -1) {
-					results.push((self ? "You are" : database.leaderboard[targetUser].name + " is") + " #" + (currentIndex + 1) + " on the " + targetRoom.title + " " + (source ? source.name + " " : "") + "leaderboard with " + (currentPointsCache[targetUser] || database.leaderboard[targetUser].current) + " " + (bits ? "bits" : "points") + ".");
-				}
-				if (annualIndex !== -1) {
-					results.push((self ? "You are" : database.leaderboard[targetUser].name + " is") + " #" + (annualIndex + 1) + " on the annual " + targetRoom.title + " " + (source ? source.name + " " : "") + "leaderboard with " + annualPointsCache[targetUser] + " " + (bits ? "bits" : "points") + ".");
-				}
-				if (!results.length) return this.say((self ? "You are" : database.leaderboard[targetUser] ? database.leaderboard[targetUser].name : targetUser + " is") + " not on the " + targetRoom.title + " " + (source ? source.name + " " : "") + "leaderboard.");
-			}
-			this.say(results.join(" "));
-		},
-		aliases: ['points', 'bits'],
-	},
-	clearleaderboard: {
-		command(target, room, user) {
-			if (this.isPm(room) || (!user.hasRank(room, 'roomowner') && !user.isDeveloper())) return;
-			if (!Storage.clearLeaderboard(room.id)) return;
-			this.say("The leaderboard was cleared.");
-		},
-		aliases: ['resetleaderboard'],
-	},
-	transferdata: {
-		command(target, room, user) {
-			if (!this.isPm(room)) return;
-			const targets = target.split(',');
-			const targetRoom = Rooms.search(targets[0]);
-			if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-			if (!user.isDeveloper() && !user.hasRank(targetRoom, 'roomowner')) return;
-			const source = targets[1].trim();
-			const destination = targets[2].trim();
-			if (!Storage.transferData(targetRoom.id, source, destination)) return;
-			this.say("Data from " + source + " in " + targetRoom.title + " has been successfully transferred to " + destination + ".");
-			targetRoom.sayCommand("/modnote " + user.name + " transferred data from " + source + " to " + destination + ".");
-		},
-	},
-	gameachievements: {
-		command(target, room, user) {
-			if (!this.isPm(room)) return;
-			const targets = target.split(',');
-			const targetRoom = Rooms.search(targets[0]);
-			if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-			if (!Config.allowScriptedGames || !Config.allowScriptedGames.includes(targetRoom.id)) return this.sayError(['disabledGameFeatures', targetRoom.title]);
-
-			let id = Tools.toId(targets[1]);
-			let name: string;
-			if (id) {
-				name = targets[1].trim();
-			} else {
-				name = user.name;
-				id = user.id;
-			}
-
-			const database = Storage.getDatabase(targetRoom);
-			const unlockedAchievements: string[] = [];
-			if (database.gameAchievements && id in database.gameAchievements) {
-				for (let i = 0; i < database.gameAchievements[id].length; i++) {
-					const achievement = database.gameAchievements[id][i];
-					if (achievement in Games.achievementNames) unlockedAchievements.push(Games.achievementNames[achievement]);
-				}
-			}
-			if (!unlockedAchievements.length) return this.say((id === user.id ? "You have" : name + " has") + " not unlocked any game achievements in " + targetRoom.title + ".");
-			this.sayHtml("<b>" + (id === user.id ? "Your" : name + "'s") + " unlocked game achievements</b>:<br />" + unlockedAchievements.join(", "), targetRoom);
-		},
-		aliases: ['achievements', 'chieves'],
 	},
 	eventlink: {
 		command(target, room, user) {
@@ -2349,7 +1722,7 @@ const commands: Dict<ICommandDefinition> = {
 
 			const database = Storage.getDatabase(eventRoom);
 			if (!database.eventInformation) return this.sayError(['noRoomEventInformation', eventRoom.title]);
-			const event = Tools.toId(targets[0]);
+			const event = toID(targets[0]);
 			if (!(event in database.eventInformation)) return this.sayError(['invalidRoomEvent', eventRoom.title]);
 			const eventInformation = database.eventInformation[event];
 			if (!eventInformation.link) return this.say(database.eventInformation[event].name + " does not have a link stored.");
@@ -2361,7 +1734,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room) || !user.hasRank(room, 'driver')) return;
 			const targets = target.split(',');
-			const event = Tools.toId(targets[0]);
+			const event = toID(targets[0]);
 			if (!event) return this.say("You must specify an event.");
 			const url = targets[1].trim();
 			if (!url.startsWith('http://') && !url.startsWith('https://')) return this.say("You must specify a valid link.");
@@ -2385,7 +1758,7 @@ const commands: Dict<ICommandDefinition> = {
 			if (this.isPm(room) || !user.hasRank(room, 'driver')) return;
 			const database = Storage.getDatabase(room);
 			if (!database.eventInformation) return this.sayError(['noRoomEventInformation', room.title]);
-			const event = Tools.toId(target);
+			const event = toID(target);
 			if (!event) return this.say("You must specify an event.");
 			if (!(event in database.eventInformation)) return this.sayError(['invalidRoomEvent', room.title]);
 			if (!database.eventInformation[event].link) return this.say(database.eventInformation[event].name + " does not have a link stored.");
@@ -2410,14 +1783,14 @@ const commands: Dict<ICommandDefinition> = {
 			}
 			const database = Storage.getDatabase(eventRoom);
 			if (!database.eventInformation) return this.sayError(['noRoomEventInformation', eventRoom.title]);
-			const event = Tools.toId(targets[0]);
+			const event = toID(targets[0]);
 			if (!event || !(event in database.eventInformation)) return this.say("You must specify a valid event.");
 			const eventInformation = database.eventInformation[event];
 			if (!eventInformation.formatIds) return this.say(database.eventInformation[event].name + " does not have any formats stored.");
 			const multipleFormats = eventInformation.formatIds.length > 1;
 			if (targets.length > 1) {
 				if (!Tools.isUsernameLength(targets[1])) return this.say("You must specify a user.");
-				const targetUser = Tools.toId(targets[1]);
+				const targetUser = toID(targets[1]);
 				if (!database.leaderboard) return this.say("There is no leaderboard for the " + eventRoom.title + " room.");
 				if (!(targetUser in database.leaderboard)) return this.say(this.sanitizeResponse(targets[1].trim() + " does not have any event points."));
 				let eventPoints = 0;
@@ -2441,7 +1814,7 @@ const commands: Dict<ICommandDefinition> = {
 			if (this.isPm(room) || !user.hasRank(room, 'driver')) return;
 			if (!Config.rankedTournaments || !Config.rankedTournaments.includes(room.id)) return this.sayError(['disabledTournamentFeatures', room.title]);
 			const targets = target.split(',');
-			const event = Tools.toId(targets[0]);
+			const event = toID(targets[0]);
 			if (!event) return this.say("You must specify an event.");
 			if (targets.length === 1) return this.say("You must specify at least 1 format.");
 			const formatIds: string[] = [];
@@ -2468,7 +1841,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room) || !user.hasRank(room, 'driver')) return;
 			const targets = target.split(',');
-			const event = Tools.toId(targets[0]);
+			const event = toID(targets[0]);
 			if (!event) return this.say("You must specify an event.");
 			const database = Storage.getDatabase(room);
 			if (!database.eventInformation) return this.sayError(['noRoomEventInformation', room.title]);
@@ -2483,7 +1856,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room) || !user.hasRank(room, 'driver')) return;
 			const targets = target.split(',');
-			const event = Tools.toId(targets[0]);
+			const event = toID(targets[0]);
 			if (!event) return this.say("You must specify an event.");
 			const database = Storage.getDatabase(room);
 			if (!database.eventInformation) return this.sayError(['noRoomEventInformation', room.title]);
@@ -2505,7 +1878,7 @@ const commands: Dict<ICommandDefinition> = {
 			if ((greeting.charAt(0) === '/' && !greeting.startsWith('/me ') && !greeting.startsWith('/mee ')) || greeting.charAt(0) === '!') return this.say("Greetings cannot be PS! commands.");
 			const database = Storage.getDatabase(targetRoom);
 			if (!database.botGreetings) database.botGreetings = {};
-			const id = Tools.toId(targets[1]);
+			const id = toID(targets[1]);
 			let duration = 0;
 			if (cmd === 'awardgreeting') {
 				if (Config.awardedBotGreetingDurations && targetRoom.id in Config.awardedBotGreetingDurations) {
@@ -2529,7 +1902,7 @@ const commands: Dict<ICommandDefinition> = {
 			const database = Storage.getDatabase(targetRoom);
 			if (!database.botGreetings) return this.say(targetRoom.title + " does not have any bot greetings stored.");
 			if (!Tools.isUsernameLength(targets[1])) return this.sayError(['invalidUsernameLength']);
-			const id = Tools.toId(targets[1]);
+			const id = toID(targets[1]);
 			if (!(id in database.botGreetings)) return this.say(this.sanitizeResponse(targets[1].trim() + " does not have a greeting stored for " + targetRoom.title + "."));
 			delete database.botGreetings[id];
 			this.say(this.sanitizeResponse(targets[1].trim() + "'s greeting in " + targetRoom.title + " has been removed."));
@@ -2555,7 +1928,7 @@ const commands: Dict<ICommandDefinition> = {
 					anyUser = true;
 					continue;
 				}
-				const id = Tools.toId(userParts[i]);
+				const id = toID(userParts[i]);
 				if (!id) continue;
 				if (!Tools.isUsernameLength(userParts[i])) return this.say("You have included an invalid username (" + userParts[0].trim() + ").");
 				if (!userids) userids = [];
@@ -2572,7 +1945,7 @@ const commands: Dict<ICommandDefinition> = {
 			let startDate: number[] = [];
 			let endDate: number[] = [];
 			for (let i = 0; i < targets.length; i++) {
-				if (!Tools.toId(targets[i])) continue;
+				if (!toID(targets[i])) continue;
 				const target = targets[i].trim();
 				if (target.includes("/") && (!startDate.length || !endDate.length)) {
 					// startDate-endDate

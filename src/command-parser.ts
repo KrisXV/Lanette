@@ -49,6 +49,10 @@ export class Command {
 		this.room.say(message, dontPrepare, dontCheckFilter);
 	}
 
+	makeModnote(message: string, dontPrepare?: boolean, dontCheckFilter?: boolean): void {
+		this.room.say(`/modnote ` + message, dontPrepare, dontCheckFilter);
+	}
+
 	sayCommand(message: string, dontCheckFilter?: boolean): void {
 		this.room.sayCommand(message, dontCheckFilter);
 	}

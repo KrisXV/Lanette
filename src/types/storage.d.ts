@@ -1,3 +1,7 @@
+import { GroupName } from "../client";
+import { IServerGroup } from "./client-message-types";
+import { IFormat } from "./in-game-data-types";
+
 interface IEventInformation {
 	name: string;
 	link?: {description: string; url: string};
@@ -41,6 +45,30 @@ export interface IDatabase {
 	botGreetings?: Dict<IBotGreeting>;
 	eventInformation?: Dict<IEventInformation>;
 	gameAchievements?: Dict<string[]>;
+	hosts?: string[];
+	tourRuleset?: string[];
+	tourcfg?: {
+		autodq: {
+			randoms: number | 'off';
+			normal: number | 'off';
+		};
+		autostart: number | 'off';
+	};
+	samples?: {[k: string]: string[]};
+	ruleset?: {
+		[k: string]: {
+			name: string;
+			baseFormat: IFormat;
+			remrules: string[];
+			addrules: string[];
+			bans: string[];
+			unbans: string[];
+			aliases?: string[];
+		};
+	};
+	rank?: {
+		pokeitem: GroupName;
+	};
 	lastGameFormatTimes?: Dict<number>;
 	lastGameTime?: number;
 	lastTournamentFormatTimes?: Dict<number>;

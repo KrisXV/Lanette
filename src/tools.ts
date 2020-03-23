@@ -2,10 +2,11 @@ import childProcess = require('child_process');
 import fs = require('fs');
 import https = require('https');
 import path = require('path');
+import url = require('url');
 import util = require('util');
 
 import { PRNG } from './prng';
-import type { HexColor, IHexColor } from './types/global-types';
+import { HexColor, IHexColor } from './types/global-types';
 import { User } from './users';
 import { IParam } from './workers/parameters';
 
@@ -545,5 +546,41 @@ export class Tools {
 
 		if (!user) user = Users.self;
 		await CommandParser.parse(user, user, Config.commandCharacter + 'reload dex');
+	}
+
+	uploadToHastebin(text: string, callback: (k: string) => void): false | void {
+		if (typeof callback !== 'function') return false;
+		const action = url.parse('https://hastebin.com/documents');
+		const options = {
+			hostname: action.hostname,
+			path: action.pathname,
+			method: 'POST',
+		};
+
+		const request = https.request(options, response => {
+			response.setEncoding('utf8');
+			let data = '';
+			response.on('data', chunk => {
+				data += chunk;
+			});
+			response.on('end', () => {
+				let key;
+				try {
+					const pageData = JSON.parse(data);
+					key = pageData.key;
+				} catch (e) {
+					if (/^[^<]*<!DOCTYPE html>/.test(data)) {
+						return callback('Cloudflare-related error uploading to Hastebin: ' + e.message);
+					} else {
+						return callback('Unknown error uploading to Hastebin: ' + e.message);
+					}
+				}
+				callback('https://hastebin.com/raw/' + key);
+			});
+		});
+		request.on('error', error => console.log('Login error: ' + error.stack));
+
+		if (text) request.write(text);
+		request.end();
 	}
 }

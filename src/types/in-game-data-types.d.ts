@@ -626,6 +626,12 @@ export interface ITemplateFormatsData {
 	isNonstandard?: Nonstandard;
 	isUnreleased?: boolean;
 	maleOnlyHidden?: boolean;
+	randomSets?: {
+		chance: number,
+		item?: string[],
+		baseMove1?: string, baseMove2?: string, baseMove3?: string, baseMove4?: string,
+		fillerMoves1?: string[], fillerMoves2?: string[], fillerMoves3?: string[], fillerMoves4?: string[],
+	}[];
 	randomBattleMoves?: string[];
 	randomDoubleBattleMoves?: string[];
 	requiredAbility?: string;
