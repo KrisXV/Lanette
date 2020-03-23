@@ -6,15 +6,10 @@ import path = require('path');
 
 import { ICommandDefinition } from "./command-parser";
 import { commandCharacter } from './config';
-import { Player } from "./room-activity";
-import { Game } from './room-game';
 import { IBattleData } from './room-tournament';
 import { Room } from "./rooms";
-import { GameDifficulty, IGameFormat } from "./types/games";
+import { IGameFormat } from "./types/games";
 import { IFormat } from "./types/in-game-data-types";
-import { User } from "./users";
-import { UserHostStatus } from './types/storage';
-import { UserHosted } from './games/internal/user-hosted';
 
 type ReloadableModule = 'client' | 'commandparser' | 'commands' | 'config' | 'dex' | 'games' | 'storage' | 'tools' | 'tournaments';
 const moduleOrder: ReloadableModule[] = ['tools', 'config', 'dex', 'client', 'commandparser', 'commands', 'games', 'storage', 'tournaments'];

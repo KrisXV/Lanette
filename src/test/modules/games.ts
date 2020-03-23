@@ -1,9 +1,9 @@
+import { fail } from 'assert';
 import { PRNGSeed } from '../../prng';
 import { Game } from '../../room-game';
 import { GameFileTests, IGameFormat, IGameTestAttributes, IUserHostedFormat } from '../../types/games';
 import { IPastGame } from '../../types/storage';
 import { assert, assertClientSendQueue, assertStrictEqual } from '../test-tools';
-import { fail } from 'assert';
 
 const room = Rooms.get('mocha')!;
 
