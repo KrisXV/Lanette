@@ -4,7 +4,6 @@ import path = require('path');
 import { Room } from './rooms';
 import { IAuctionDatabase, IDatabase, IGlobalDatabase } from './types/storage';
 import { User } from './users';
-import { LogsWorker } from './workers/logs';
 
 const MAX_QUEUED_OFFLINE_MESSAGES = 3;
 const LAST_SEEN_EXPIRATION = 30 * 24 * 60 * 60 * 1000;
@@ -18,14 +17,12 @@ const databasesDir = path.join(Tools.rootFolder, 'databases');
 const baseOfflineMessageLength = '[28 Jun 2019, 00:00:00 GMT-0500] **** said: '.length;
 
 interface IStorageWorkers {
-	logs: LogsWorker;
 }
 
 export class Storage {
 	databases: Dict<IDatabase> = {};
 	loadedDatabases: boolean = false;
 	workers: IStorageWorkers = {
-		logs: new LogsWorker(),
 	};
 
 	globalDatabaseExportInterval: NodeJS.Timer;
@@ -45,7 +42,6 @@ export class Storage {
 	unrefWorkers(): void {
 		const workers = Object.keys(this.workers) as (keyof IStorageWorkers)[];
 		for (let i = 0; i < workers.length; i++) {
-			this.workers[workers[i]].unref();
 		}
 	}
 

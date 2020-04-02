@@ -225,17 +225,8 @@ export class TeamValidator {
 		return new PokemonSources(maxSourceGen, minSourceGen);
 	}
 
-<<<<<<< HEAD
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	checkLearnset(move: Move, species: Template, setSources = this.allSources(species), set: AnyObject = {}): {type: string; [key: string]: any} | null {
-=======
-	checkLearnset(
-		move: Move,
-		species: Template,
-		setSources = this.allSources(species),
-		set: AnyObject = {},
-	): {type: string, [key: string]: any} | null {
->>>>>>> Remove unused code
 		const dex = this.dex;
 		if (!setSources.size()) throw new Error(`Bad sources passed to checkLearnset`);
 

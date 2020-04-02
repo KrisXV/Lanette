@@ -832,7 +832,6 @@ const commands: Dict<ICommandDefinition> = {
 			for (const t of targets) {
 				const id = toID(t) as ReloadableModule;
 				if (id === 'commandparser') {
-					if (Storage.workers.logs.requestsByUserid.length) return this.say("You must wait for all logs requests to finish first.");
 				}
 				const moduleIndex = moduleOrder.indexOf(id);
 				if (moduleIndex !== -1) {
@@ -1214,7 +1213,7 @@ const commands: Dict<ICommandDefinition> = {
 			}
 			const month = parseInt(targets[0]);
 			if (isNaN(month)) return this.say("You must specify the month (1-12).");
-			const schedule = Tournaments.getTournamentScheduleHtml(tournamentRoom);
+			const schedule = Tournaments.getTournamentScheduleHtml(tournamentRoom, month);
 			if (!schedule) return this.say("No tournament schedule found for " + tournamentRoom.title + ".");
 			this.sayCommand("!code " + schedule);
 		},
