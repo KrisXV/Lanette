@@ -1871,7 +1871,7 @@ export class Dex {
 	getCustomFormatName(format: IFormat, room?: Room, showAll?: boolean): string {
 		if (!format.customRules || !format.customRules.length) return format.name;
 		if (!format.separatedCustomRules) format.separatedCustomRules = this.separateCustomRules(format.customRules);
-		const defaultCustomRules: Partial<ISeparatedCustomRules> = room && room.id in Tournaments.defaultCustomRules ? Tournaments.defaultCustomRules[room.id] : {};
+		const defaultCustomRules: Partial<ISeparatedCustomRules> = {};
 		const bansLength = format.separatedCustomRules.bans.length;
 		const unbansLength = format.separatedCustomRules.unbans.length;
 		const addedRulesLength = format.separatedCustomRules.addedrules.length;

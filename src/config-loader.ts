@@ -52,41 +52,7 @@ export function load(config: typeof Config): typeof Config {
 	if (config.rooms) config.rooms = config.rooms.map(x => Tools.toRoomId(x));
 	if (config.roomAliases) config.roomAliases = objectKeysToRoomId(stringObjectToRoomIds(config.roomAliases));
 
-	if (config.allowScriptedGames) config.allowScriptedGames = arrayToRoomIds(config.allowScriptedGames);
-	if (config.allowUserHostedGames) config.allowUserHostedGames = arrayToRoomIds(config.allowUserHostedGames);
-	if (config.gameCategoryCooldowns) objectKeysToRoomId(config.gameCategoryCooldowns);
-	if (config.gameCooldownTimers) objectKeysToRoomId(config.gameCooldownTimers);
-	if (config.maxUserHostedGameWinners) objectKeysToRoomId(config.maxUserHostedGameWinners);
-	if (config.maxUserHostedGameWinners) objectKeysToRoomId(config.maxUserHostedGameWinners);
-	if (config.maxQueuedUserHostedGames) objectKeysToRoomId(config.maxQueuedUserHostedGames);
-	if (config.userHostCooldownTimers) objectKeysToRoomId(config.userHostCooldownTimers);
-	if (config.disallowCreatingPastGames) config.disallowCreatingPastGames = arrayToRoomIds(config.disallowCreatingPastGames);
-	if (config.disallowCreatingPreviousUserHostedGame) config.disallowCreatingPreviousUserHostedGame = arrayToRoomIds(config.disallowCreatingPreviousUserHostedGame);
-	if (config.limitGamesByVariant) config.limitGamesByVariant = arrayToRoomIds(config.limitGamesByVariant);
-	if (config.limitGamesByMode) config.limitGamesByMode = arrayToRoomIds(config.limitGamesByMode);
-	if (config.limitGamesByCategory) config.limitGamesByCategory = arrayToRoomIds(config.limitGamesByCategory);
 	if (config.awardedBotGreetingDurations) objectKeysToRoomId(config.awardedBotGreetingDurations);
-
-	if (config.allowTournaments) config.allowTournaments = arrayToRoomIds(config.allowTournaments);
-	if (config.rankedTournaments) config.rankedTournaments = arrayToRoomIds(config.rankedTournaments);
-	if (config.rankedCustomTournaments) config.rankedCustomTournaments = arrayToRoomIds(config.rankedCustomTournaments);
-	if (config.useDefaultUnrankedTournaments) config.useDefaultUnrankedTournaments = arrayToRoomIds(config.useDefaultUnrankedTournaments);
-	if (config.scheduledTournamentsMaxPlayerCap) config.scheduledTournamentsMaxPlayerCap = arrayToRoomIds(config.scheduledTournamentsMaxPlayerCap);
-	if (config.displayTournamentFormatInfo) config.displayTournamentFormatInfo = arrayToRoomIds(config.displayTournamentFormatInfo);
-	if (config.disallowTournamentScouting) config.disallowTournamentScouting = arrayToRoomIds(config.disallowTournamentScouting);
-	if (config.disallowTournamentScoutingFormats) config.disallowTournamentScoutingFormats = stringArrayObjectToIds(config.disallowTournamentScoutingFormats);
-	if (config.disallowTournamentModjoin) config.disallowTournamentModjoin = arrayToRoomIds(config.disallowTournamentModjoin);
-	if (config.disallowTournamentBattleLinks) config.disallowTournamentBattleLinks = arrayToRoomIds(config.disallowTournamentBattleLinks);
-	if (config.disallowQueueingPastTournaments) config.disallowQueueingPastTournaments = arrayToRoomIds(config.disallowQueueingPastTournaments);
-	if (config.tournamentAutoDQTimers) objectKeysToRoomId(config.tournamentAutoDQTimers);
-	if (config.adjustTournamentCaps) config.adjustTournamentCaps = arrayToRoomIds(config.adjustTournamentCaps);
-	if (config.trackTournamentBattleScores) config.trackTournamentBattleScores = arrayToRoomIds(config.trackTournamentBattleScores);
-	if (config.tournamentStartTimers) objectKeysToRoomId(config.tournamentStartTimers);
-	if (config.defaultTournamentPlayerCaps) objectKeysToRoomId(config.defaultTournamentPlayerCaps);
-	if (config.tournamentRoomAdvertisements) config.tournamentRoomAdvertisements = stringArrayObjectToRoomIds(config.tournamentRoomAdvertisements);
-	if (config.randomTournamentTimers) objectKeysToRoomId(config.randomTournamentTimers);
-	if (config.allowUserHostedTournaments) config.allowUserHostedTournaments = arrayToRoomIds(config.allowUserHostedTournaments);
-	if (config.userHostedTournamentRanks) objectKeysToRoomId(config.userHostedTournamentRanks);
 
 	return config;
 }

@@ -1,22 +1,17 @@
 import { GroupName } from "./client";
 import { Player } from "./room-activity";
-import { Tournament } from "./room-tournament";
-import { IUserHostedTournament } from "./tournaments";
 import { IRoomInfoResponse } from "./types/client-message-types";
 import { User } from "./users";
 
 export type RoomType = 'battle' | 'chat' | 'html';
 
 export class Room {
-	approvedUserHostedTournaments: Dict<IUserHostedTournament> | null = null;
 	bannedWords: string[] | null = null;
 	bannedWordsRegex: RegExp | null = null;
 	readonly htmlMessageListeners: Dict<() => void> = {};
 	readonly messageListeners: Dict<() => void> = {};
 	modchat: string = 'off';
-	newUserHostedTournaments: Dict<IUserHostedTournament> | null = null;
 	timers: Dict<NodeJS.Timer> | null = null;
-	tournament: Tournament | null = null;
 	readonly uhtmlMessageListeners: Dict<Dict<() => void>> = {};
 	readonly users = new Set<User>();
 
@@ -26,8 +21,6 @@ export class Room {
 	type!: RoomType;
 
 	// set immediately in checkConfigSettings()
-	unlinkTournamentReplays!: boolean;
-	unlinkChallongeLinks!: boolean;
 
 	constructor(id: string) {
 		this.id = id;
@@ -42,18 +35,13 @@ export class Room {
 	}
 
 	deInit() {
-		if (this.tournament && this.tournament.room === this) this.tournament.deallocate();
-
 		this.users.forEach(user => {
 			user.rooms.delete(this);
 			if (!user.rooms.size) Users.remove(user);
 		});
 	}
 
-	checkConfigSettings() {
-		this.unlinkTournamentReplays = Config.disallowTournamentBattleLinks && Config.disallowTournamentBattleLinks.includes(this.id) ? true : false;
-		this.unlinkChallongeLinks = Config.allowUserHostedTournaments && Config.allowUserHostedTournaments.includes(this.id) ? true : false;
-	}
+	checkConfigSettings() {}
 
 	onRoomInfoResponse(response: IRoomInfoResponse): void {
 		this.modchat = response.modchat === false ? 'off' : response.modchat;

@@ -1,4 +1,3 @@
-import { ITournamentEndJSON, ITournamentUpdateJSON } from "../room-tournament";
 import { RoomType } from "../rooms";
 import { IFormat } from "../types/in-game-data-types";
 
@@ -245,18 +244,14 @@ export interface ITournamentMessageTypes {
 	/**
 	 * Update JSON
 	 */
-	update: {
-		readonly json: ITournamentUpdateJSON;
-	};
+	update: {};
 
 	updateEnd: {};
 
 	/**
 	 * End JSON
 	 */
-	end: {
-		readonly json: ITournamentEndJSON;
-	};
+	end: {};
 
 	forceend: {};
 

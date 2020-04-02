@@ -28,11 +28,7 @@ global.Rooms = new rooms.Rooms();
 import * as storage from './storage';
 global.Storage = new storage.Storage();
 
-import * as tournaments from './tournaments';
-global.Tournaments = new tournaments.Tournaments();
-
 import * as users from './users';
 global.Users = new users.Users();
 
-Tournaments.loadSchedules();
 Storage.importDatabases();

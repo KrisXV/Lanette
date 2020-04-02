@@ -5,7 +5,6 @@ import websocket = require('websocket');
 
 import { Room, RoomType } from './rooms';
 import { IClientMessageTypes, IRoomInfoResponse, IServerGroup, ITournamentMessageTypes, IUserDetailsResponse, ServerGroupData } from './types/client-message-types';
-import { ISeparatedCustomRules } from './types/in-game-data-types';
 import { User } from './users';
 
 export type GroupName = 'voice' | 'bot' | 'driver' | 'moderator' | 'roomowner' | 'muted' | 'locked';
@@ -428,9 +427,6 @@ export class Client {
 				if (room.id === 'staff') room.sayCommand('/filters view');
 				room.sayCommand('/cmd roominfo ' + room.id);
 				room.sayCommand('/banword list');
-				if (room.id in Tournaments.schedules) {
-					Tournaments.setScheduledTournament(room);
-				}
 			}
 			break;
 		}
@@ -727,7 +723,7 @@ export class Client {
 				room.modchat = messageArguments.html.split('<div class="broadcast-red"><strong>Moderated chat was set to ')[1].split('!</strong>')[0];
 			} else if (messageArguments.html.startsWith('<div class="broadcast-blue"><strong>Moderated chat was disabled!</strong>')) {
 				room.modchat = 'off';
-			} else if (messageArguments.html.startsWith("<div class='infobox infobox-limited'>This tournament includes:<br />")) {
+			/*} else if (messageArguments.html.startsWith("<div class='infobox infobox-limited'>This tournament includes:<br />")) {
 				if (room.tournament) {
 					const separatedCustomRules: ISeparatedCustomRules = {bans: [], unbans: [], addedrules: [], removedrules: []};
 					const lines = messageArguments.html.substr(0, messageArguments.html.length - 6).split("<div class='infobox infobox-limited'>This tournament includes:<br />")[1].split('<br />');
@@ -753,7 +749,7 @@ export class Client {
 					room.tournament.format.customRules = null;
 					room.tournament.format.separatedCustomRules = null;
 					if (!room.tournament.manuallyNamed) room.tournament.setCustomFormatName();
-				}
+				}*/
 			}
 			break;
 		}
@@ -939,164 +935,6 @@ export class Client {
 					}
 					break;
 				}
-
-				case 'update': {
-					const messageArguments: ITournamentMessageTypes['update'] = {
-						json: JSON.parse(messageParts.join("|")),
-					};
-					if (!room.tournament) Tournaments.createTournament(room, messageArguments.json);
-					if (room.tournament) room.tournament.update(messageArguments.json);
-					break;
-				}
-
-				case 'updateEnd': {
-					if (room.tournament) room.tournament.updateEnd();
-					break;
-				}
-
-				case 'end': {
-					const messageArguments: ITournamentMessageTypes['end'] = {
-						json: JSON.parse(messageParts.join("|")),
-					};
-					if (!room.tournament) Tournaments.createTournament(room, messageArguments.json);
-					if (room.tournament) {
-						room.tournament.update(messageArguments.json);
-						room.tournament.updateEnd();
-						room.tournament.end();
-					}
-					const database = Storage.getDatabase(room);
-					const now = Date.now();
-					database.lastTournamentTime = now;
-
-					// delayed scheduled tournament
-					if (room.id in Tournaments.nextScheduledTournaments && Tournaments.nextScheduledTournaments[room.id].time <= now) {
-						Tournaments.setScheduledTournamentTimer(room);
-					} else {
-						let queuedTournament = false;
-						if (database.queuedTournament) {
-							const format = Dex.getFormat(database.queuedTournament.formatid, true);
-							if (format) {
-								queuedTournament = true;
-								if (!database.queuedTournament.time) database.queuedTournament.time = now + Tournaments.queuedTournamentTime;
-								Tournaments.setTournamentTimer(room, database.queuedTournament.time, format, database.queuedTournament.playerCap, database.queuedTournament.scheduled);
-							} else {
-								delete database.queuedTournament;
-								Storage.exportDatabase(room.id);
-							}
-						}
-
-						if (!queuedTournament) {
-							if (Config.randomTournamentTimers && room.id in Config.randomTournamentTimers && Tournaments.canSetRandomTournament(room)) {
-								Tournaments.setRandomTournamentTimer(room, Config.randomTournamentTimers[room.id]);
-							} else if (room.id in Tournaments.scheduledTournaments) {
-								Tournaments.setScheduledTournamentTimer(room);
-							}
-						}
-					}
-					break;
-				}
-
-				case 'forceend': {
-					if (room.tournament) room.tournament.forceEnd();
-					break;
-				}
-
-				case 'start': {
-					if (room.tournament) room.tournament.start();
-					break;
-				}
-
-				case 'join': {
-					if (!room.tournament) return;
-
-					const messageArguments: ITournamentMessageTypes['join'] = {
-						username: messageParts[0],
-					};
-					room.tournament.createPlayer(messageArguments.username);
-					break;
-				}
-
-				case 'leave':
-				case 'disqualify': {
-					if (!room.tournament) return;
-
-					const messageArguments: ITournamentMessageTypes['leave'] = {
-						username: messageParts[0],
-					};
-					room.tournament.destroyPlayer(messageArguments.username);
-					break;
-				}
-
-				case 'battlestart': {
-					if (!room.tournament) return;
-
-					const messageArguments: ITournamentMessageTypes['battlestart'] = {
-						usernameA: messageParts[0],
-						usernameB: messageParts[1],
-						roomid: messageParts[2],
-					};
-					room.tournament.onBattleStart(messageArguments.usernameA, messageArguments.usernameB, messageArguments.roomid);
-					break;
-				}
-
-				case 'battleend': {
-					if (!room.tournament) return;
-
-					const messageArguments: ITournamentMessageTypes['battleend'] = {
-						usernameA: messageParts[0],
-						usernameB: messageParts[1],
-						result: messageParts[2] as 'win' | 'loss' | 'draw',
-						score: messageParts[3].split(',') as [string, string],
-						recorded: messageParts[4] as 'success' | 'fail',
-						roomid: messageParts[5],
-					};
-					room.tournament.onBattleEnd(messageArguments.usernameA, messageArguments.usernameB, messageArguments.score, messageArguments.roomid);
-					break;
-				}
-			}
-			break;
-		}
-
-		/**
-		 * Battle messages
-		 */
-		case 'player': {
-			const messageArguments: IClientMessageTypes['player'] = {
-				slot: messageParts[0],
-				username: messageParts[1],
-			};
-			if (room.tournament) {
-				const player = room.tournament.players[toID(messageArguments.username)];
-				if (player) {
-					if (!(room.id in room.tournament.battleData)) {
-						room.tournament.battleData[room.id] = {
-							remainingPokemon: {},
-							slots: new Map(),
-						};
-					}
-					room.tournament.battleData[room.id].slots.set(player, messageArguments.slot);
-				}
-			}
-			break;
-		}
-
-		case 'teamsize': {
-			const messageArguments: IClientMessageTypes['teamsize'] = {
-				slot: messageParts[0],
-				size: parseInt(messageParts[1]),
-			};
-			if (room.tournament) {
-				room.tournament.battleData[room.id].remainingPokemon[messageArguments.slot] = messageArguments.size;
-			}
-			break;
-		}
-
-		case 'faint': {
-			const messageArguments: IClientMessageTypes['faint'] = {
-				details: messageParts[0],
-			};
-			if (room.tournament) {
-				room.tournament.battleData[room.id].remainingPokemon[messageArguments.details.substr(0, 2)]--;
 			}
 			break;
 		}
@@ -1106,85 +944,6 @@ export class Client {
 	parseChatMessage(room: Room, user: User, message: string): void {
 		CommandParser.parse(room, user, message);
 		const lowerCaseMessage = message.toLowerCase();
-
-		// unlink tournament battle replays
-		if (room.unlinkTournamentReplays && !user.hasRank(room, 'voice') && room.tournament && !room.tournament.format.team && lowerCaseMessage.includes("replay.pokemonshowdown.com/")) {
-			let battle = lowerCaseMessage.split("replay.pokemonshowdown.com/")[1];
-			if (battle) {
-				battle = 'battle-' + battle.split(" ")[0].trim();
-				if (room.tournament.battleRooms.includes(battle)) {
-					room.sayCommand("/warn " + user.name + ", Please do not link replays to tournament battles");
-				}
-			}
-		}
-
-		// unlink unapproved Challonge tournaments
-		if (room.unlinkChallongeLinks && lowerCaseMessage.includes('challonge.com/')) {
-			const links: string[] = [];
-			const possibleLinks = message.split(" ");
-			for (const linkID of possibleLinks) {
-				const link = Tools.getChallongeUrl(linkID);
-				if (link) links.push(link);
-			}
-			// let hasOwnLink = false;
-			const database = Storage.getDatabase(room);
-			let rank: GroupName = 'voice';
-			if (Config.userHostedTournamentRanks && room.id in Config.userHostedTournamentRanks) rank = Config.userHostedTournamentRanks[room.id].review;
-			const authOrTHC = user.hasRank(room, rank) || (database.thcWinners && user.id in database.thcWinners);
-			outer:
-			for (const link of links) {
-				/*
-				if (database.hostingBlacklist && user.id in database.hostingBlacklist) {
-					room.sayCommand("/warn " + user.name + ", You are currently banned from hosting");
-					break;
-				}
-				*/
-				// hasOwnLink = true;
-				if (room.approvedUserHostedTournaments) {
-					for (const i in room.approvedUserHostedTournaments) {
-						if (room.approvedUserHostedTournaments[i].urls.includes(link)) {
-							if (!authOrTHC && room.approvedUserHostedTournaments[i].hostId !== user.id) {
-								room.sayCommand("/warn " + user.name + ", Please do not post links to other hosts' tournaments");
-							}
-							break outer;
-						}
-					}
-				}
-
-				if (authOrTHC) {
-					if (!room.approvedUserHostedTournaments) room.approvedUserHostedTournaments = {};
-					room.approvedUserHostedTournaments[link] = {
-						hostName: user.name,
-						hostId: user.id,
-						startTime: Date.now(),
-						approvalStatus: 'approved',
-						reviewer: user.id,
-						urls: [link],
-					};
-				} else {
-					for (const i in room.newUserHostedTournaments) {
-						if (room.newUserHostedTournaments[i].urls.includes(link)) {
-							if (room.newUserHostedTournaments[i].hostId !== user.id) {
-								room.sayCommand("/warn " + user.name + ", Please do not post links to other hosts' tournaments");
-							} else if (room.newUserHostedTournaments[i].approvalStatus === 'changes-requested') {
-								let name = room.newUserHostedTournaments[i].reviewer;
-								const reviewer = Users.get(name);
-								if (reviewer) name = reviewer.name;
-								room.sayCommand("/warn " + user.name + ", " + name + " has requested changes for your tournament and you must wait for them to be approved");
-							} else {
-								room.sayCommand("/warn " + user.name + ", You must wait for a staff member to approve your tournament");
-							}
-							break outer;
-						}
-					}
-					room.sayCommand("/warn " + user.name + ", Your tournament must be approved by a staff member");
-					user.say('Use the command ``' + Config.commandCharacter + 'gettourapproval ' + room.id + ', __bracket link__, __signup link__`` to get your tournament approved (insert your actual links).');
-					break;
-				}
-			}
-
-			// if (hasOwnLink) Tournaments.setTournamentGameTimer(room);
-		}
 	}
 
 	parseServerGroups(groups: ServerGroupData[]): void {

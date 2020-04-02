@@ -5,7 +5,6 @@ import { Dex } from './dex';
 import { Rooms } from './rooms';
 import { Storage } from './storage';
 import { Tools } from './tools';
-import { Tournaments } from './tournaments';
 import { Users } from './users';
 
 /* eslint-disable no-redeclare, no-undef */
@@ -21,7 +20,6 @@ declare global {
 	const tempConfig: boolean;
 	const toID: (input: string | number | {id: string} | undefined) => string;
 	const Tools: Tools;
-	const Tournaments: Tournaments;
 	const Users: Users;
 }
 /* eslint-enable */
