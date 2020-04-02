@@ -1,16 +1,9 @@
 import { Room } from "./rooms";
 import { User } from "./users";
 
-<<<<<<< HEAD
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface ICommandDefinition<T = undefined, U = T extends Game ? GameCommandReturnType : any> {
-	asyncCommand?: (this: T extends undefined ? Command : T, target: string, room: Room | User, user: User, alias: string) => Promise<U>;
-	command?: (this: T extends undefined ? Command : T, target: string, room: Room | User, user: User, alias: string) => U;
-=======
 export interface ICommandDefinition<T = undefined, U = T> {
 	asyncCommand?: (this: T extends undefined ? Command : T, target: string, room: Room | User, user: User, alias: string) => Promise<void>;
 	command?: (this: T extends undefined ? Command : T, target: string, room: Room | User, user: User, alias: string) => void;
->>>>>>> Cleanse files
 	aliases?: string[];
 	readonly chatOnly?: boolean;
 	readonly developerOnly?: boolean;
@@ -18,12 +11,7 @@ export interface ICommandDefinition<T = undefined, U = T> {
 	readonly pmOnly?: boolean;
 }
 
-<<<<<<< HEAD
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type CommandsDict<T = undefined, U = T extends Game ? GameCommandReturnType : any> = Dict<Omit<ICommandDefinition<T, U>, "aliases">>;
-=======
 export type CommandsDict<T = undefined, U = T> = Dict<Omit<ICommandDefinition<T, U>, "aliases">>;
->>>>>>> Cleanse files
 
 type CommandErrorOptionalTarget = 'invalidBotRoom' | 'invalidFormat' | 'invalidGameFormat' | 'invalidTournamentFormat' | 'invalidUserHostedGameFormat' | 'tooManyGameModes' |
 	'tooManyGameVariants' | 'emptyUserHostedGameQueue';
