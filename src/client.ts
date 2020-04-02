@@ -262,11 +262,11 @@ export class Client {
 		} else {
 			room = Rooms.add('lobby');
 		}
-		for (let i = 0; i < lines.length; i++) {
-			if (!lines[i]) continue;
+		for (const [i, line] of lines.entries()) {
+			if (!line) continue;
 			try {
 				this.parseMessage(room, lines[i]);
-				if (lines[i].startsWith('|init|')) {
+				if (line.startsWith('|init|')) {
 					const page = room.type === 'html';
 					const chat = !page && room.type === 'chat';
 					for (let j = i + 1; j < lines.length; j++) {
@@ -367,7 +367,7 @@ export class Client {
 			}
 			const {away, status, username} = Tools.parseUsernameText(messageArguments.usernameText);
 
-			if (Tools.toId(username) !== Users.self.id) return;
+			if (toID(username) !== Users.self.id) return;
 			if (this.loggedIn) {
 				if (status || Users.self.status) Users.self.status = status;
 				if (away) {
@@ -389,8 +389,8 @@ export class Client {
 					this.send('|/cmd userdetails ' + Users.self.id);
 				}
 				if (Config.rooms) {
-					for (let i = 0; i < Config.rooms.length; i++) {
-						this.send('|/join ' + Config.rooms[i]);
+					for (const room of Config.rooms) {
+						this.send(`|/join ${room}`);
 					}
 				}
 				if (Config.avatar) this.send('|/avatar ' + Config.avatar);
@@ -461,7 +461,7 @@ export class Client {
 			for (let i = 1; i < users.length; i++) {
 				const rank = users[i].charAt(0);
 				const {away, status, username} = Tools.parseUsernameText(users[i].substr(1));
-				const id = Tools.toId(username);
+				const id = toID(username);
 				if (!id) continue;
 
 				const user = Users.add(username, id);
@@ -485,7 +485,7 @@ export class Client {
 				usernameText: messageParts[0].substr(1),
 			};
 			const {away, status, username} = Tools.parseUsernameText(messageArguments.usernameText);
-			const id = Tools.toId(username);
+			const id = toID(username);
 			if (!id) return;
 
 			const user = Users.add(username, id);
@@ -498,14 +498,7 @@ export class Client {
 			}
 			user.rooms.set(room, {lastChatMessage: 0, rank: messageArguments.rank});
 			const now = Date.now();
-			Storage.updateLastSeen(user, now);
 			if (Config.allowMail && messageArguments.rank !== this.groupSymbols.locked) Storage.retrieveOfflineMessages(user);
-			if ((!room.game || room.game.isMiniGame) && !room.userHostedGame && (!(user.id in this.botGreetingCooldowns) || now - this.botGreetingCooldowns[user.id] >= BOT_GREETING_COOLDOWN)) {
-				if (Storage.checkBotGreeting(room, user, now)) this.botGreetingCooldowns[user.id] = now;
-			}
-			if (room.logChatMessages) {
-				Storage.logChatMessage(room, now, 'J', messageArguments.rank + user.name);
-			}
 			break;
 		}
 
@@ -517,7 +510,7 @@ export class Client {
 				usernameText: messageParts[0].substr(1),
 			};
 			const {away, status, username} = Tools.parseUsernameText(messageArguments.usernameText);
-			const id = Tools.toId(username);
+			const id = toID(username);
 			if (!id) return;
 
 			const user = Users.add(username, id);
@@ -534,10 +527,6 @@ export class Client {
 				}
 			}
 			const now = Date.now();
-			Storage.updateLastSeen(user, now);
-			if (room.logChatMessages) {
-				Storage.logChatMessage(room, now, 'L', messageArguments.rank + user.name);
-			}
 			break;
 		}
 
@@ -560,7 +549,6 @@ export class Client {
 			}
 			const roomData = user.rooms.get(room);
 			user.rooms.set(room, {lastChatMessage: roomData ? roomData.lastChatMessage : 0, rank: messageArguments.rank});
-			Storage.updateLastSeen(user, Date.now());
 			break;
 		}
 
@@ -584,7 +572,7 @@ export class Client {
 				};
 			}
 
-			const id = Tools.toId(messageArguments.username);
+			const id = toID(messageArguments.username);
 			if (!id) return;
 
 			const user = Users.add(messageArguments.username, id);
@@ -593,7 +581,7 @@ export class Client {
 
 			if (user === Users.self) {
 				if (messageArguments.message.startsWith(HTML_CHAT_COMMAND)) {
-					const htmlId = Tools.toId(messageArguments.message.substr(HTML_CHAT_COMMAND.length));
+					const htmlId = toID(messageArguments.message.substr(HTML_CHAT_COMMAND.length));
 					if (htmlId in room.htmlMessageListeners) {
 						room.htmlMessageListeners[htmlId]();
 						delete room.htmlMessageListeners[htmlId];
@@ -609,16 +597,16 @@ export class Client {
 					const commaIndex = uhtml.indexOf(',');
 					if (commaIndex !== -1) {
 						const name = uhtml.substr(0, commaIndex);
-						const id = Tools.toId(name);
+						const id = toID(name);
 						if (id in room.uhtmlMessageListeners) {
-							const htmlId = Tools.toId(uhtml.substr(commaIndex + 1));
+							const htmlId = toID(uhtml.substr(commaIndex + 1));
 							if (htmlId in room.uhtmlMessageListeners[id]) {
 								room.uhtmlMessageListeners[id][htmlId]();
 								delete room.uhtmlMessageListeners[id][htmlId];
 							}
 						}
 					} else {
-						const id = Tools.toId(messageArguments.message);
+						const id = toID(messageArguments.message);
 						if (id in room.messageListeners) {
 							room.messageListeners[id]();
 							delete room.messageListeners[id];
@@ -627,11 +615,6 @@ export class Client {
 				}
 			} else {
 				this.parseChatMessage(room, user, messageArguments.message);
-			}
-
-			Storage.updateLastSeen(user, messageArguments.timestamp);
-			if (room.logChatMessages) {
-				Storage.logChatMessage(room, messageArguments.timestamp, 'c', messageArguments.rank + user.name + '|' + messageArguments.message);
 			}
 
 			if (messageArguments.message.startsWith('/log ') && messageArguments.message.includes(HOTPATCH_CHAT_COMMAND)) {
@@ -660,12 +643,12 @@ export class Client {
 			};
 			const isHtml = messageArguments.message.startsWith("/raw") || messageArguments.message.startsWith("/html");
 			const isUthml = !isHtml && messageArguments.message.startsWith("/uthml");
-			const id = Tools.toId(messageArguments.username);
+			const id = toID(messageArguments.username);
 			if (!id) return;
 
 			const user = Users.add(messageArguments.username, id);
 			if (user === Users.self) {
-				const recipientId = Tools.toId(messageArguments.recipient);
+				const recipientId = toID(messageArguments.recipient);
 				if (!recipientId) return;
 
 				const recipient = Users.add(messageArguments.recipient, recipientId);
@@ -673,10 +656,10 @@ export class Client {
 					if (recipient.uhtmlMessageListeners) {
 						const uhtml = messageArguments.message.substr(messageArguments.message.indexOf(" ") + 1);
 						const pipeIndex = uhtml.indexOf("|");
-						const id = Tools.toId(uhtml.substr(0, pipeIndex));
+						const id = toID(uhtml.substr(0, pipeIndex));
 						const html = uhtml.substr(pipeIndex + 1);
 						if (id in recipient.uhtmlMessageListeners) {
-							const htmlId = Tools.toId(html);
+							const htmlId = toID(html);
 							if (htmlId in recipient.uhtmlMessageListeners[id]) {
 								recipient.uhtmlMessageListeners[id][htmlId]();
 								delete recipient.uhtmlMessageListeners[id][htmlId];
@@ -685,7 +668,7 @@ export class Client {
 					}
 				} else if (isHtml) {
 					if (recipient.htmlMessageListeners) {
-						const htmlId = Tools.toId(messageArguments.message.substr(messageArguments.message.indexOf(" ") + 1));
+						const htmlId = toID(messageArguments.message.substr(messageArguments.message.indexOf(" ") + 1));
 						if (htmlId in recipient.htmlMessageListeners) {
 							recipient.htmlMessageListeners[htmlId]();
 							delete recipient.htmlMessageListeners[htmlId];
@@ -693,7 +676,7 @@ export class Client {
 					}
 				} else {
 					if (recipient.messageListeners) {
-						const id = Tools.toId(messageArguments.message);
+						const id = toID(messageArguments.message);
 						if (id in recipient.messageListeners) {
 							recipient.messageListeners[id]();
 							delete recipient.messageListeners[id];
@@ -734,7 +717,7 @@ export class Client {
 			const messageArguments: IClientMessageTypes['html'] = {
 				html: messageParts.join("|"),
 			};
-			const htmlId = Tools.toId(messageArguments.html);
+			const htmlId = toID(messageArguments.html);
 			if (htmlId in room.htmlMessageListeners) {
 				room.htmlMessageListeners[htmlId]();
 				delete room.htmlMessageListeners[htmlId];
@@ -749,10 +732,10 @@ export class Client {
 					const separatedCustomRules: ISeparatedCustomRules = {bans: [], unbans: [], addedrules: [], removedrules: []};
 					const lines = messageArguments.html.substr(0, messageArguments.html.length - 6).split("<div class='infobox infobox-limited'>This tournament includes:<br />")[1].split('<br />');
 					let currentCategory: 'bans' | 'unbans' | 'addedrules' | 'removedrules' = 'bans';
-					for (let i = 0; i < lines.length; i++) {
-						let line = lines[i].trim();
+					for (let line of lines) {
+						line = line.trim();
 						if (line.startsWith('<b>')) {
-							const category = Tools.toId(line.split('<b>')[1].split('</b>')[0]);
+							const category = toID(line.split('<b>')[1].split('</b>')[0]);
 							if (category === 'bans' || category === 'unbans' || category === 'addedrules' || category === 'removedrules') {
 								currentCategory = category;
 							}
@@ -789,14 +772,14 @@ export class Client {
 					let shortener = false;
 					let evasion = false;
 
-					for (let i = 0; i < rows.length; i++) {
-						if (!rows[i]) continue;
-						if (rows[i].startsWith('<th colspan="2"><h3>')) {
-							currentHeader = rows[i].split('<th colspan="2"><h3>')[1].split('</h3>')[0].split(' <span ')[0];
+					for (const row of rows) {
+						if (!row) continue;
+						if (row.startsWith('<th colspan="2"><h3>')) {
+							currentHeader = row.split('<th colspan="2"><h3>')[1].split('</h3>')[0].split(' <span ')[0];
 							shortener = currentHeader === 'URL Shorteners';
 							evasion = currentHeader === 'Filter Evasion Detection';
-						} else if (rows[i].startsWith('<td><abbr title="') && currentHeader !== 'Whitelisted names') {
-							let word = rows[i].split('<td><abbr title="')[1].split('</abbr>')[0].trim();
+						} else if (row.startsWith('<td><abbr title="') && currentHeader !== 'Whitelisted names') {
+							let word = row.split('<td><abbr title="')[1].split('</abbr>')[0].trim();
 							let filterTo = false;
 							const titleEndIndex = word.indexOf('">');
 							if (titleEndIndex !== -1) word = word.substr(titleEndIndex + 2);
@@ -841,9 +824,9 @@ export class Client {
 				name: messageParts[0],
 				html: messageParts.slice(1).join("|"),
 			};
-			const id = Tools.toId(messageArguments.name);
+			const id = toID(messageArguments.name);
 			if (id in room.uhtmlMessageListeners) {
-				const htmlId = Tools.toId(messageArguments.html);
+				const htmlId = toID(messageArguments.html);
 				if (htmlId in room.uhtmlMessageListeners[id]) {
 					room.uhtmlMessageListeners[id][htmlId]();
 					delete room.uhtmlMessageListeners[id][htmlId];
@@ -1083,7 +1066,7 @@ export class Client {
 				username: messageParts[1],
 			};
 			if (room.tournament) {
-				const player = room.tournament.players[Tools.toId(messageArguments.username)];
+				const player = room.tournament.players[toID(messageArguments.username)];
 				if (player) {
 					if (!(room.id in room.tournament.battleData)) {
 						room.tournament.battleData[room.id] = {
@@ -1139,8 +1122,8 @@ export class Client {
 		if (room.unlinkChallongeLinks && lowerCaseMessage.includes('challonge.com/')) {
 			const links: string[] = [];
 			const possibleLinks = message.split(" ");
-			for (let i = 0; i < possibleLinks.length; i++) {
-				const link = Tools.getChallongeUrl(possibleLinks[i]);
+			for (const linkID of possibleLinks) {
+				const link = Tools.getChallongeUrl(linkID);
 				if (link) links.push(link);
 			}
 			// let hasOwnLink = false;
@@ -1149,8 +1132,7 @@ export class Client {
 			if (Config.userHostedTournamentRanks && room.id in Config.userHostedTournamentRanks) rank = Config.userHostedTournamentRanks[room.id].review;
 			const authOrTHC = user.hasRank(room, rank) || (database.thcWinners && user.id in database.thcWinners);
 			outer:
-			for (let i = 0; i < links.length; i++) {
-				const link = links[i];
+			for (const link of links) {
 				/*
 				if (database.hostingBlacklist && user.id in database.hostingBlacklist) {
 					room.sayCommand("/warn " + user.name + ", You are currently banned from hosting");
@@ -1203,9 +1185,6 @@ export class Client {
 
 			// if (hasOwnLink) Tournaments.setTournamentGameTimer(room);
 		}
-
-		// per-game parsing
-		if (room.game && room.game.parseChatMessage) room.game.parseChatMessage(user, message);
 	}
 
 	parseServerGroups(groups: ServerGroupData[]): void {
@@ -1213,10 +1192,10 @@ export class Client {
 		// Bot is below Driver on the user list but above Moderator in terms of permissions
 		let botIndex = -1;
 		let moderatorIndex = -1;
-		for (let i = 0; i < groups.length; i++) {
-			if (groups[i].name === 'Bot') {
+		for (const [i, group] of groups.entries()) {
+			if (group.name === 'Bot') {
 				botIndex = i;
-			} else if ((groups[i].type === 'leadership' || groups[i].type === 'staff') && groups[i].name === 'Moderator') {
+			} else if ((group.type === 'leadership' || group.type === 'staff') && group.name === 'Moderator') {
 				moderatorIndex = i;
 			}
 		}
@@ -1226,20 +1205,20 @@ export class Client {
 		}
 
 		let ranking = groups.length;
-		for (let i = 0; i < groups.length; i++) {
-			this.serverGroups[groups[i].symbol] = Object.assign({ranking}, groups[i]);
-			if (groups[i].name === 'Bot') this.groupSymbols.bot = groups[i].symbol;
-			if (groups[i].type === 'leadership' || groups[i].type === 'staff') {
-				if (groups[i].name === 'Room Owner' || groups[i].name === 'Moderator' || groups[i].name === 'Driver') {
-					this.groupSymbols[Tools.toId(groups[i].name as string)] = groups[i].symbol;
+		for (const group of groups) {
+			this.serverGroups[group.symbol] = Object.assign({ranking}, group);
+			if (group.name === 'Bot') this.groupSymbols.bot = group.symbol;
+			if (group.type === 'leadership' || group.type === 'staff') {
+				if (group.name === 'Room Owner' || group.name === 'Moderator' || group.name === 'Driver') {
+					this.groupSymbols[toID(group.name!)] = group.symbol;
 				}
-			} else if (groups[i].type === 'normal' && groups[i].name === 'Voice') {
-				this.groupSymbols.voice = groups[i].symbol;
-			} else if (groups[i].type === 'punishment') {
-				if (groups[i].name === 'Locked') {
-					this.groupSymbols.locked = groups[i].symbol;
-				} else if (groups[i].name === 'Muted') {
-					this.groupSymbols.muted = groups[i].symbol;
+			} else if (group.type === 'normal' && group.name === 'Voice') {
+				this.groupSymbols.voice = group.symbol;
+			} else if (group.type === 'punishment') {
+				if (group.name === 'Locked') {
+					this.groupSymbols.locked = group.symbol;
+				} else if (group.name === 'Muted') {
+					this.groupSymbols.muted = group.symbol;
 				}
 			}
 			ranking--;
@@ -1251,16 +1230,16 @@ export class Client {
 		lowerCase = lowerCase.replace(/__|\*\*|``|\[\[|\]\]/g, '');
 
 		if (this.filterRegularExpressions) {
-			for (let i = 0; i < this.filterRegularExpressions.length; i++) {
-				if (lowerCase.match(this.filterRegularExpressions[i])) return true;
+			for (const regex of this.filterRegularExpressions) {
+				if (!!lowerCase.match(regex)) return true;
 			}
 		}
 
 		if (this.evasionFilterRegularExpressions) {
 			let evasionLowerCase = lowerCase.normalize('NFKC');
 			evasionLowerCase = evasionLowerCase.replace(/[\s-_,.]+/g, '.');
-			for (let i = 0; i < this.evasionFilterRegularExpressions.length; i++) {
-				if (evasionLowerCase.match(this.evasionFilterRegularExpressions[i])) return true;
+			for (const evasionRegex of this.evasionFilterRegularExpressions) {
+				if (!!evasionLowerCase.match(evasionRegex)) return true;
 			}
 		}
 
@@ -1331,7 +1310,7 @@ export class Client {
 			options.method = 'GET';
 			options.path += '?' + querystring.stringify({
 				'act': 'getassertion',
-				'userid': Tools.toId(Config.username),
+				'userid': toID(Config.username),
 				'challstr': this.challstr,
 			});
 		}

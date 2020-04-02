@@ -1,12 +1,16 @@
-import { Game } from "./room-game";
 import { Room } from "./rooms";
-import { GameCommandReturnType } from "./types/games";
 import { User } from "./users";
 
+<<<<<<< HEAD
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface ICommandDefinition<T = undefined, U = T extends Game ? GameCommandReturnType : any> {
 	asyncCommand?: (this: T extends undefined ? Command : T, target: string, room: Room | User, user: User, alias: string) => Promise<U>;
 	command?: (this: T extends undefined ? Command : T, target: string, room: Room | User, user: User, alias: string) => U;
+=======
+export interface ICommandDefinition<T = undefined, U = T> {
+	asyncCommand?: (this: T extends undefined ? Command : T, target: string, room: Room | User, user: User, alias: string) => Promise<void>;
+	command?: (this: T extends undefined ? Command : T, target: string, room: Room | User, user: User, alias: string) => void;
+>>>>>>> Cleanse files
 	aliases?: string[];
 	readonly chatOnly?: boolean;
 	readonly developerOnly?: boolean;
@@ -14,8 +18,12 @@ export interface ICommandDefinition<T = undefined, U = T extends Game ? GameComm
 	readonly pmOnly?: boolean;
 }
 
+<<<<<<< HEAD
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type CommandsDict<T = undefined, U = T extends Game ? GameCommandReturnType : any> = Dict<Omit<ICommandDefinition<T, U>, "aliases">>;
+=======
+export type CommandsDict<T = undefined, U = T> = Dict<Omit<ICommandDefinition<T, U>, "aliases">>;
+>>>>>>> Cleanse files
 
 type CommandErrorOptionalTarget = 'invalidBotRoom' | 'invalidFormat' | 'invalidGameFormat' | 'invalidTournamentFormat' | 'invalidUserHostedGameFormat' | 'tooManyGameModes' |
 	'tooManyGameVariants' | 'emptyUserHostedGameQueue';
@@ -89,7 +97,7 @@ export class Command {
 	async run(newCommand?: string, newTarget?: string): Promise<any> {
 		let command = this.originalCommand;
 		if (newCommand) {
-			command = Tools.toId(newCommand);
+			command = toID(newCommand);
 			if (!(command in Commands)) throw new Error(this.originalCommand + " ran non-existent command '" + newCommand + '"');
 		}
 		if (Commands[command].developerOnly && !this.user.isDeveloper() && this.user !== Users.self) return;
@@ -112,9 +120,9 @@ export class Command {
 		const parts = this.target.split(delimiter);
 		const lastMultipleTarget = parts.length - 1;
 		this.runningMultipleTargets = true;
-		for (let i = 0; i < parts.length; i++) {
+		for (const [i, part] of parts.entries()) {
 			if (i === lastMultipleTarget) this.runningMultipleTargets = false;
-			await this.run(this.originalCommand, parts[i].trim());
+			await this.run(this.originalCommand, part.trim());
 		}
 	}
 
@@ -141,11 +149,11 @@ export class CommandParser {
 			if (command.aliases) {
 				const aliases = command.aliases.slice();
 				delete command.aliases;
-				for (let i = 0; i < aliases.length; i++) {
-					dict[Tools.toId(aliases[i])] = command;
+				for (const alias of aliases) {
+					dict[toID(alias)] = command;
 				}
 			}
-			dict[Tools.toId(i)] = command;
+			dict[toID(i)] = command;
 		}
 
 		return dict;
@@ -173,7 +181,7 @@ export class CommandParser {
 			command = message.substr(0, spaceIndex);
 			target = message.substr(spaceIndex + 1).trim();
 		}
-		command = Tools.toId(command);
+		command = toID(command);
 		if (!(command in Commands)) return;
 
 		return await (new Command(command, target, room, user)).run();

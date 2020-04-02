@@ -1,7 +1,5 @@
 import { GroupName } from "./client";
-import { UserHosted } from "./games/internal/user-hosted";
 import { Player } from "./room-activity";
-import { Game } from "./room-game";
 import { Tournament } from "./room-tournament";
 import { IUserHostedTournament } from "./tournaments";
 import { IRoomInfoResponse } from "./types/client-message-types";
@@ -13,7 +11,6 @@ export class Room {
 	approvedUserHostedTournaments: Dict<IUserHostedTournament> | null = null;
 	bannedWords: string[] | null = null;
 	bannedWordsRegex: RegExp | null = null;
-	game: Game | null = null;
 	readonly htmlMessageListeners: Dict<() => void> = {};
 	readonly messageListeners: Dict<() => void> = {};
 	modchat: string = 'off';
@@ -21,7 +18,6 @@ export class Room {
 	timers: Dict<NodeJS.Timer> | null = null;
 	tournament: Tournament | null = null;
 	readonly uhtmlMessageListeners: Dict<Dict<() => void>> = {};
-	userHostedGame: UserHosted | null = null;
 	readonly users = new Set<User>();
 
 	readonly id: string;
@@ -30,7 +26,6 @@ export class Room {
 	type!: RoomType;
 
 	// set immediately in checkConfigSettings()
-	logChatMessages!: boolean;
 	unlinkTournamentReplays!: boolean;
 	unlinkChallongeLinks!: boolean;
 
@@ -46,10 +41,8 @@ export class Room {
 		this.type = type;
 	}
 
-	deInit(): void {
-		if (this.game && this.game.room === this) this.game.deallocate(true);
+	deInit() {
 		if (this.tournament && this.tournament.room === this) this.tournament.deallocate();
-		if (this.userHostedGame && this.userHostedGame.room === this) this.userHostedGame.deallocate(true);
 
 		this.users.forEach(user => {
 			user.rooms.delete(this);
@@ -57,8 +50,7 @@ export class Room {
 		});
 	}
 
-	checkConfigSettings(): void {
-		this.logChatMessages = !this.id.startsWith('battle-') && !this.id.startsWith('groupchat-') && !(Config.disallowChatLogging && Config.disallowChatLogging.includes(this.id));
+	checkConfigSettings() {
 		this.unlinkTournamentReplays = Config.disallowTournamentBattleLinks && Config.disallowTournamentBattleLinks.includes(this.id) ? true : false;
 		this.unlinkChallongeLinks = Config.allowUserHostedTournaments && Config.allowUserHostedTournaments.includes(this.id) ? true : false;
 	}
@@ -129,7 +121,7 @@ export class Room {
 	onUhtml(name: string, html: string, listener: () => void): void {
 		const id = Tools.toId(name);
 		if (!(id in this.uhtmlMessageListeners)) this.uhtmlMessageListeners[id] = {};
-		this.uhtmlMessageListeners[id][Tools.toId(Client.getListenerUhtml(html))] = listener;
+		this.uhtmlMessageListeners[id][toID(Client.getListenerUhtml(html))] = listener;
 	}
 
 	off(message: string): void {
@@ -143,7 +135,7 @@ export class Room {
 	offUhtml(name: string, html: string): void {
 		const id = Tools.toId(name);
 		if (!(id in this.uhtmlMessageListeners)) return;
-		delete this.uhtmlMessageListeners[id][Tools.toId(Client.getListenerUhtml(html))];
+		delete this.uhtmlMessageListeners[id][toID(Client.getListenerUhtml(html))];
 	}
 }
 

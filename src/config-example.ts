@@ -1,5 +1,4 @@
 import { GroupName } from "./client";
-import { GameDifficulty } from "./types/games";
 
 /* eslint-disable prefer-const*/
 
@@ -205,21 +204,6 @@ export let gameAutoCreateTimers: Dict<number> = {};
 export let gameAutoStartTimers: Dict<number> = {};
 
 /**
- * Difficulties for players in scripted games
- */
-export let scriptedGameDifficulties: Dict<GameDifficulty> = {};
-
-/**
- * Difficulties for players in user-hosted games
- */
-export let userHostedGamePlayerDifficulties: Dict<GameDifficulty> = {};
-
-/**
- * Difficulties for hosts in user-hosted games
- */
-export let userHostedGameHostDifficulties: Dict<GameDifficulty> = {};
-
-/**
  * The maximum number of players that can win a user-hosted game in each specified room
  */
 export let maxUserHostedGameWinners: Dict<number> = {};
@@ -258,11 +242,6 @@ export let limitGamesByMode: string[] = [];
  * A list of rooms (roomids) where categories on the past games list cannot be created before a cooldown
  */
 export let limitGamesByCategory: string[] = [];
-
-/**
- * A list of rooms (roomids) where messages will not be logged
- */
-export let disallowChatLogging: string[] = [];
 
 /**
  * A link to the server's log viewer

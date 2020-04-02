@@ -135,7 +135,7 @@ export class Tournament extends Activity {
 			const generatorNumber = parseInt(generator.split("-tuple")[0]);
 			if (!isNaN(generatorNumber)) this.generator = generatorNumber;
 		}
-		this.isRoundRobin = Tools.toId(generator).includes('roundrobin');
+		this.isRoundRobin = toID(generator).includes('roundrobin');
 	}
 
 	setCustomFormatName(): void {
@@ -276,7 +276,7 @@ export class Tournament extends Activity {
 			const winnerPm = 'You were awarded **' + winnerPoints + ' ' + pointsName + '** for being ' + (winners.length > 1 ? 'a' : 'the') + ' tournament winner! To see your total amount, use this command: ``.rank ' + this.room.title + '``';
 			for (let i = 0; i < winners.length; i++) {
 				Storage.addPoints(this.room, winners[i], winnerPoints, this.format.id);
-				// Client.outgoingPms[Tools.toId(winners[i])] = winnerPm;
+				// Client.outgoingPms[toID(winners[i])] = winnerPm;
 				const user = Users.get(winners[i]);
 				if (user) user.say(winnerPm);
 			}
@@ -284,7 +284,7 @@ export class Tournament extends Activity {
 			const runnerUpPm = 'You were awarded **' + runnerUpPoints + ' ' + pointsName + '** for being ' + (runnersUp.length > 1 ? 'a' : 'the') + ' runner-up in the tournament! To see your total amount, use this command: ``.rank ' + this.room.title + '``';
 			for (let i = 0; i < runnersUp.length; i++) {
 				Storage.addPoints(this.room, runnersUp[i], runnerUpPoints, this.format.id);
-				// Client.outgoingPms[Tools.toId(runnersUp[i])] = runnerUpPm;
+				// Client.outgoingPms[toID(runnersUp[i])] = runnerUpPm;
 				const user = Users.get(runnersUp[i]);
 				if (user) user.say(runnerUpPm);
 			}
@@ -292,7 +292,7 @@ export class Tournament extends Activity {
 			const semiFinalistPm = 'You were awarded **' + semiFinalistPoints + ' ' + pointsName + '** for being ' + (semiFinalists.length > 1 ? 'a' : 'the') + ' semi-finalist in the tournament! To see your total amount, use this command: ``.rank ' + this.room.title + '``';
 			for (let i = 0; i < semiFinalists.length; i++) {
 				Storage.addPoints(this.room, semiFinalists[i], semiFinalistPoints, this.format.id);
-				// Client.outgoingPms[Tools.toId(semiFinalists[i])] = semiFinalistPm;
+				// Client.outgoingPms[toID(semiFinalists[i])] = semiFinalistPm;
 				const user = Users.get(semiFinalists[i]);
 				if (user) user.say(semiFinalistPm);
 			}
@@ -350,10 +350,10 @@ export class Tournament extends Activity {
 				if (!node.children) continue;
 
 				if (node.children[0] && node.children[0].team) {
-					const userA = Tools.toId(node.children[0].team);
+					const userA = toID(node.children[0].team);
 					if (!players[userA]) players[userA] = node.children[0].team;
 					if (node.children[1] && node.children[1].team) {
-						const userB = Tools.toId(node.children[1].team);
+						const userB = toID(node.children[1].team);
 						if (!players[userB]) players[userB] = node.children[1].team;
 						if (node.state === 'finished') {
 							if (node.result === 'win') {
@@ -374,7 +374,7 @@ export class Tournament extends Activity {
 		} else if (this.info.bracketData.type === 'table') {
 			if (!this.info.bracketData.tableHeaders || !this.info.bracketData.tableHeaders.cols) return;
 			for (let i = 0; i < this.info.bracketData.tableHeaders.cols.length; i++) {
-				const player = Tools.toId(this.info.bracketData.tableHeaders.cols[i]);
+				const player = toID(this.info.bracketData.tableHeaders.cols[i]);
 				if (!players[player]) players[player] = this.info.bracketData.tableHeaders.cols[i];
 			}
 		}

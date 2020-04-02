@@ -6,7 +6,6 @@ declare namespace NodeJS {
 		Commands: import('./command-parser').CommandsDict;
 		Config: Partial<typeof import('./config-example')>;
 		Dex: import('./dex').Dex;
-		Games: import('./games').Games;
 		Rooms: import('./rooms').Rooms;
 		Storage: import('./storage').Storage;
 		tempConfig: boolean;

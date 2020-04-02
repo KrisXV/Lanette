@@ -8,7 +8,6 @@ import { ICommandDefinition } from "./command-parser";
 import { commandCharacter } from './config';
 import { IBattleData } from './room-tournament';
 import { Room } from "./rooms";
-import { IGameFormat } from "./types/games";
 import { IFormat } from "./types/in-game-data-types";
 
 type ReloadableModule = 'client' | 'commandparser' | 'commands' | 'config' | 'dex' | 'games' | 'storage' | 'tools' | 'tournaments';
@@ -18,14 +17,28 @@ const AWARDED_BOT_GREETING_DURATION = 60 * 24 * 60 * 60 * 1000;
 
 let reloadInProgress = false;
 
-const ALL_TIERS = ['AG', 'Uber', 'OU', 'UUBL', 'UU', 'RUBL', 'RU', 'NUBL', 'NU', 'PUBL', 'PU', 'ZU', 'NFE', 'LC Uber', 'LC', 'CAP', 'CAP NFE', 'CAP LC', 'DUber', 'DOU', 'DBL', 'DUU', 'DNU', 'Mega', 'All Pokemon', 'All Abilities', 'All Items', 'All Moves'].map(toID);
+const ALL_TIERS = ['AG', 'Uber', 'OU', 'UUBL', 'UU', 'RUBL', 'RU', 'NUBL', 'NU', 'PUBL', 'PU', 'ZU', 'NFE', 'LC Uber', 'LC', 'CAP', 'CAP NFE', 'CAP LC', 'DUber', 'DOU', 'DBL', 'DUU', 'DNU', 'Mega', 'All Pokemon', 'All Abilities', 'All Items', 'All Moves', 'Nonexistent'].map(toID);
 
 /* eslint-disable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
 const commands: Dict<ICommandDefinition> = {
+	mcrb: {
+		command(target, room, user) {
+			if (this.isPm(room)) return;
+			if (!target) return;
+			this.say(`/tour new gen${target.trim()}randombattle, elim,,, Pan-Am Spotlight Sunday: [Gen ${target}] Camomons Random Battle`);
+			this.say(`/tour rules [Gen 8] Camomons, !Team Preview`);
+			this.say(`/tour autostart 3`);
+			this.say(`/tour forcetimer on`);
+			this.say(`!om [Gen 8] Camomons`);
+			return;
+		},
+		developerOnly: true,
+	},
 	shockedlapras: {
 		command(target, room, user) {
 			if (this.isPm(room) || !user.canPerform(room, 'roomowner')) return;
-			this.sayUhtml(``, `<img src="https://cdn.discordapp.com/emojis/528403513894502440.png?v=1" alt="shockedlapras" width="20" height="20" />`, room);
+			if (!Users.self.canPerform(room, 'bot')) return;
+			this.sayUhtml(`shockedlapras`, `<img src="https://cdn.discordapp.com/emojis/528403513894502440.png?v=1" alt="shockedlapras" width="20" height="20" />`, room);
 			return;
 		},
 		aliases: ['sl'],
@@ -34,6 +47,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return;
 			if (!user.canPerform(room, 'moderator')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`${commandCharacter}econfig autostart/autodq`);
 			target = target.trim();
 			const args = target.split(' ');
@@ -126,6 +140,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return this.say(`This can only be used in rooms.`);
 			if (!user.canPerform(room, 'driver')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`Correct Syntax: ${commandCharacter}addsample __[tier]__, __[link]__`);
 			target = target.trim();
 			const args = target.split(',');
@@ -155,6 +170,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return this.say(`This can only be used in rooms.`);
 			if (!user.canPerform(room, 'driver')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`Correct Syntax: ${commandCharacter}delsample __[tier]__, __[link]__`);
 			target = target.trim();
 			const args = target.split(',');
@@ -177,6 +193,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			const args = target.trim().split(',');
 			if (this.isPm(room)) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			const db = Storage.getDatabase(room);
 			if (!db.samples) return this.say(`There are no sample teams.`);
 			const arg0ID = toID(args[0]);
@@ -207,6 +224,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
 			if (!user.canPerform(room, 'driver')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`Correct syntax: ${commandCharacter}host __[user]__`);
 			target = target.trim();
 			if (!Storage.databases[room.id].hosts) {
@@ -228,6 +246,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
 			if (!user.canPerform(room, 'driver')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`Correct syntax: ${commandCharacter}dehost __[user]__`);
 			target = target.trim();
 			const db = Storage.getDatabase(room).hosts;
@@ -246,6 +265,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return;
 			if (!user.canPerform(room, 'roomowner')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			target = target.trim();
 			Storage.getDatabase(room).hosts = [];
 			Storage.exportDatabase(room.id);
@@ -257,6 +277,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return;
 			if (!user.canPerform(room, 'driver')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			const hosts = Storage.getDatabase(room).hosts;
 			if (!hosts || !hosts.length) return this.say(`There are currently no hosts.`);
 			const prettyHostList = `Hosts for ${room.id}:\n\n${hosts.map((host, index) => `${index + 1}: ${host}`).join('\n')}`;
@@ -277,6 +298,7 @@ const commands: Dict<ICommandDefinition> = {
 				return this.say(`\`\`@etour\`\` command guide: [[here <https://pastebin.com/raw/fN23vVUn>]]`);
 			}
 			if (this.isPm(room)) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			const db = Storage.getDatabase(room);
 			if (!db.tourRuleset) {
 				db.tourRuleset = [];
@@ -607,6 +629,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
 			if (!user.canPerform(room, 'moderator')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`Correct syntax: ${commandCharacter}delbanlist [ID]`);
 			const formatid = toID(target);
 			const rset = Storage.getDatabase(room).ruleset;
@@ -623,6 +646,7 @@ const commands: Dict<ICommandDefinition> = {
 		command(target, room, user) {
 			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
 			if (!user.canPerform(room, 'moderator')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`Correct syntax: ${commandCharacter}addbanlist Name | Base Format | Ruleset <separated by commas and using !, +, - format> | Aliases (optional, separated by commas)`);
 			const targets = target.split('|');
 			if (targets.length < 3) return this.say(`Correct syntax: ${commandCharacter}addbanlist Name | Base Format | Ruleset <separated by commas and using !, +, - format> | Aliases (optional, separated by commas)`);
@@ -762,113 +786,6 @@ const commands: Dict<ICommandDefinition> = {
 			return this.say('/roomauth');
 		},
 	},*/
-	pokemon: {
-		command(target, room, user) {
-			if (room.id !== 'bof') return;
-			if (this.isPm(room)) return;
-			const db = Storage.getDatabase(room);
-			if (!db.rank) {
-				db.rank = {
-					pokeitem: 'driver',
-				};
-				Storage.exportDatabase(room.id);
-			}
-			if (!user.canPerform(room, db.rank.pokeitem)) return;
-			if (!target || !Dex.getTemplate(target)) return this.say(`that literally is not a pokemon`);
-			this.sayUhtml(toID(target), `<psicon pokemon="${toID(target)}">`, room);
-		},
-	},
-	item: {
-		command(target, room, user) {
-			if (room.id !== 'bof') return;
-			if (this.isPm(room)) return;
-			const db = Storage.getDatabase(room);
-			if (!db.rank) {
-				db.rank = {
-					pokeitem: 'driver',
-				};
-				Storage.exportDatabase(room.id);
-			}
-			if (!user.canPerform(room, db.rank.pokeitem)) return;
-			if (!target || !Dex.getItem(target)) return this.say(`that literally is not an item`);
-			this.sayUhtml(toID(target), `<psicon item="${toID(target)}">`, room);
-		},
-	},
-	repeat: {
-		command(target, room, user) {
-			if (room.id !== 'bof') return;
-			if (this.isPm(room)) return;
-			const count = parseInt(target.split(',')[0]);
-			if (isNaN(count)) return this.say(`${target.split(',')[0]} is not a number.`);
-			if (count < 0 || count > 5) return this.say(`The count must be a number between 1 and 100.`);
-			const args = target.split(',').slice(1);
-			if (args.length < 2) return;
-			for (const i of args) {
-				if (!Dex.getTemplate(i)) return this.say(`${i} is not a Pokemon.`);
-			}
-			let c = 0;
-			while (c < count) {
-				args.forEach(x => this.sayUhtml('repeat', `<psicon pokemon="${x}">`, room));
-				c++;
-			}
-		},
-	},
-	lasagna: {
-		command(target, room, user) {
-			if (room.id !== 'bof' || this.isPm(room) || !user.canPerform(room, 'roomowner')) return;
-			const str = 'i fucking hate it i fucking hate lasagna its the fucking its the worst thing my dad always makes fucking god damn lasagna at christmas and its the worst i fucking hate it its like my least favorite food my brother hates it too i dont know why my dad fucking makes that shit its fucking disgusting i hate lasagna fuck';
-			if (target) {
-				if (!Tools.isUsernameLength(target.trim())) return;
-				return this.say(`/pminfobox ${target}, ${str}`);
-			}
-			this.sayUhtml('lasgna', 'i fucking hate it i fucking hate lasagna its the fucking its the worst thing my dad always makes fucking god damn lasagna at christmas and its the worst i fucking hate it its like my least favorite food my brother hates it too i dont know why my dad fucking makes that shit its fucking disgusting i hate lasagna fuck', room);
-		},
-	},
-	illegalmons: {
-		command(target, room, user) {
-			if (room.id !== 'bof') return;
-			if (this.isPm(room)) return;
-			if (!user.canPerform(room, 'roomowner')) return;
-			let t = toID(target);
-			if (!t) t = 'all';
-			if (t === 'all') return this.say(`lol im not broadcasting that`);
-			const illegalMonsList: {[k: string]: string[]} = {cap: [], past: [], future: [], custom: [], unobtainable: [], lgpe: []};
-			for (const i in Dex.data.pokedex) {
-				const template = Dex.getTemplate(i);
-				if (!template || typeof template.isNonstandard !== 'string') continue;
-				if (template.isNonstandard === 'CAP') {
-					illegalMonsList.cap.push(template.name);
-				}
-				if (template.isNonstandard === 'Past') {
-					illegalMonsList.past.push(template.name);
-				}
-				if (template.isNonstandard === 'Future') {
-					illegalMonsList.future.push(template.name);
-				}
-				if (template.isNonstandard === 'Unobtainable') {
-					illegalMonsList.unobtainable.push(template.name);
-				}
-				if (template.isNonstandard === 'Custom') {
-					illegalMonsList.custom.push(template.name);
-				}
-				if (template.isNonstandard === 'LGPE') {
-					illegalMonsList.lgpe.push(template.name);
-				}
-			}
-			let usedArray = [];
-			switch (t) {
-				case 'cap': usedArray = illegalMonsList.cap; break;
-				// case 'past': usedArray = illegalMonsList.past; break;
-				case 'future': usedArray = illegalMonsList.future; break;
-				case 'unobtainable': usedArray = illegalMonsList.unobtainable; break;
-				case 'custom': usedArray = illegalMonsList.custom; break;
-				case 'lgpe': usedArray = illegalMonsList.lgpe; break;
-				default: usedArray = illegalMonsList.custom.concat(illegalMonsList.lgpe); break;
-			}
-			const buf = usedArray.sort().map(x => `<span style="white-space:nowrap;text-decoration:none;"><psicon pokemon="${x}">${x}</span>`).join(`,`);
-			this.sayHtml(buf, room);
-		},
-	},
 	/**
 	 * Developer commands
 	 */
@@ -912,8 +829,8 @@ const commands: Dict<ICommandDefinition> = {
 			if (!target) return;
 			const hasModules: boolean[] = moduleOrder.slice().map(x => false);
 			const targets = target.split(",");
-			for (let i = 0; i < targets.length; i++) {
-				const id = toID(targets[i]) as ReloadableModule;
+			for (const t of targets) {
+				const id = toID(t) as ReloadableModule;
 				if (id === 'commandparser') {
 					if (Storage.workers.logs.requestsByUserid.length) return this.say("You must wait for all logs requests to finish first.");
 				}
@@ -921,7 +838,7 @@ const commands: Dict<ICommandDefinition> = {
 				if (moduleIndex !== -1) {
 					hasModules[moduleIndex] = true;
 				} else {
-					return this.say("'" + targets[i].trim() + "' is not a module or cannot be reloaded.");
+					return this.say(`'${t.trim}' is not a module or cannot be reloaded.`);
 				}
 			}
 
@@ -929,8 +846,8 @@ const commands: Dict<ICommandDefinition> = {
 			reloadInProgress = true;
 
 			const modules: ReloadableModule[] = [];
-			for (let i = 0; i < hasModules.length; i++) {
-				if (hasModules[i]) modules.push(moduleOrder[i]);
+			for (const [i, m] of hasModules.entries()) {
+				if (m) modules.push(moduleOrder[i]);
 			}
 
 			if (modules.includes('commandparser')) CommandParser.reloadInProgress = true;
@@ -938,36 +855,36 @@ const commands: Dict<ICommandDefinition> = {
 			this.say("Running ``tsc``...");
 			// eslint-disable-next-line @typescript-eslint/no-var-requires
 			await require(path.join(Tools.rootFolder, 'build.js'))(() => {
-				for (let i = 0; i < modules.length; i++) {
-					if (modules[i] === 'client') {
+				for (const m of modules) {
+					if (m === 'client') {
 						const oldClient = global.Client;
 						Tools.uncacheTree('./client');
 						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						const client: typeof import('./client') = require('./client');
 						global.Client = new client.Client();
 						Client.onReload(oldClient);
-					} else if (modules[i] === 'commandparser') {
+					} else if (m === 'commandparser') {
 						Tools.uncacheTree('./command-parser');
 						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						const commandParser: typeof import('./command-parser') = require('./command-parser');
 						global.CommandParser = new commandParser.CommandParser();
-					} else if (modules[i] === 'commands') {
+					} else if (m === 'commands') {
 						Tools.uncacheTree('./commands');
 						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						global.Commands = CommandParser.loadBaseCommands(require('./commands'));
-					} else if (modules[i] === 'config') {
+					} else if (m === 'config') {
 						Tools.uncacheTree('./config');
 						Tools.uncacheTree('./config-loader');
 						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						const config: typeof import('./config-example') = require('./config-loader').load(require('./config'));
 						global.Config = config;
 						Rooms.checkLoggingConfigs();
-					} else if (modules[i] === 'dex') {
+					} else if (m === 'dex') {
 						Tools.uncacheTree('./dex');
 						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						const dex: typeof import('./dex') = require('./dex');
 						global.Dex = new dex.Dex();
-					} else if (modules[i] === 'storage') {
+					} else if (m === 'storage') {
 						const oldStorage = global.Storage;
 						Storage.unrefWorkers();
 						Tools.uncacheTree('./storage');
@@ -975,14 +892,14 @@ const commands: Dict<ICommandDefinition> = {
 						const storage: typeof import('./storage') = require('./storage');
 						global.Storage = new storage.Storage();
 						Storage.onReload(oldStorage);
-					} else if (modules[i] === 'tools') {
+					} else if (m === 'tools') {
 						const oldTools = global.Tools;
 						Tools.uncacheTree('./tools');
 						// eslint-disable-next-line @typescript-eslint/no-var-requires
 						const tools: typeof import('./tools') = require('./tools');
 						global.Tools = new tools.Tools();
 						Tools.onReload(oldTools);
-					} else if (modules[i] === 'tournaments') {
+					} else if (m === 'tournaments') {
 						const oldTournaments = global.Tournaments;
 						Tools.uncacheTree('./tournaments');
 						Tools.uncacheTree('./room-activity');
@@ -1007,21 +924,6 @@ const commands: Dict<ICommandDefinition> = {
 	/**
 	 * Informational commands
 	 */
-	jointournament: {
-		command(target, room, user) {
-			if (!this.isPm(room) && !user.hasRank(room, 'voice')) return;
-			const targetUser = Users.get(target);
-			this.say((targetUser ? targetUser.name + ": you" : "You") + " can join a scripted tournament by clicking the ``Join`` button at the top of the chat or using the command ``/tour join``. | Guide to joining user-hosted tournaments: http://pstournaments.weebly.com/joining-a-tournament.html");
-		},
-		aliases: ['jointour'],
-	},
-	autodq: {
-		command(target, room, user) {
-			if (this.isPm(room) || !user.hasRank(room, 'voice')) return;
-			if (!Config.tournamentAutoDQTimers || !(room.id in Config.tournamentAutoDQTimers)) return this.say("The automatic disqualification timer is not set for " + room.title + ".");
-			this.say("The automatic disqualification timer is currently set to " + Config.tournamentAutoDQTimers[room.id] + " minutes. You will be disqualified from a tournament if you fail to send or accept a challenge from your opponent before the timer expires.");
-		},
-	},
 	sampleteams: {
 		command(target, room, user) {
 			if (!this.isPm(room) && !user.hasRank(room, 'voice')) return;
@@ -1064,6 +966,83 @@ const commands: Dict<ICommandDefinition> = {
 	},
 
 	/**
+<<<<<<< HEAD
+=======
+	 * Game commands
+	 */
+	randomitem: {
+		command(target, room, user) {
+			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice')))) return;
+			const item = Dex.getExistingItem(Tools.sampleOne(Object.keys(Dex.data.items))).name;
+			if (this.pm) {
+				this.say('Randomly generated item: **' + item + '**');
+			} else {
+				this.say('!dt ' + item);
+			}
+		},
+		aliases: ['ritem', 'randitem'],
+	},
+	randomability: {
+		command(target, room, user) {
+			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice')))) return;
+			const abilities = Object.keys(Dex.data.abilities);
+			let ability = Dex.getExistingAbility(Tools.sampleOne(abilities));
+			while (ability.id === 'noability') {
+				ability = Dex.getExistingAbility(Tools.sampleOne(abilities));
+			}
+			if (this.pm) {
+				this.say('Randomly generated ability: **' + ability.name + '**');
+			} else {
+				this.say('!dt ' + ability.name);
+			}
+		},
+		aliases: ['rability', 'randability'],
+	},
+	randomtype: {
+		command(target, room, user) {
+			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice')))) return;
+			const types = Object.keys(Dex.data.typeChart);
+			let type = Tools.sampleOne(types);
+			if (Tools.random(2)) {
+				types.splice(types.indexOf(type), 1);
+				type += "/" + Tools.sampleOne(types);
+			}
+			this.say('Randomly generated type: **' + type + '**');
+		},
+		aliases: ['rtype', 'randtype'],
+	},
+	randomexistingtype: {
+		command(target, room, user) {
+			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice')))) return;
+			let type = '';
+			const pokedex = Dex.getPokemonList();
+			for (const pokemon of pokedex) {
+				if (!pokemon.forme) {
+					type = pokemon.types.join('/');
+					break;
+				}
+			}
+			this.say('Randomly generated existing type: **' + type + '**');
+		},
+		aliases: ['rextype', 'randextype', 'rexistingtype', 'randexistingtype'],
+	},
+	randomcharacter: {
+		command(target, room, user) {
+			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice')))) return;
+			this.say('Randomly generated character: **' + Tools.sampleOne(Dex.data.characters).trim() + '**');
+		},
+		aliases: ['rchar', 'rcharacter', 'randchar', 'randcharacter'],
+	},
+	randomlocation: {
+		command(target, room, user) {
+			if (!this.isPm(room) && (!Users.self.hasRank(room, 'voice') || (!user.hasRank(room, 'voice')))) return;
+			this.say('Randomly generated location: **' + Tools.sampleOne(Dex.data.locations).trim() + '**');
+		},
+		aliases: ['rlocation', 'rloc', 'randloc', 'randlocation'],
+	},
+
+	/**
+>>>>>>> Cleanse files
 	 * Tournament commands
 	 */
 	tournament: {
@@ -1170,9 +1149,9 @@ const commands: Dict<ICommandDefinition> = {
 			if (targetPlayer.eliminated) return this.say(targetPlayer.name + " has already been eliminated from the " + tournamentRoom.title + " tournament.");
 
 			let currentBattle: IBattleData | undefined;
-			for (let i = 0; i < tournamentRoom.tournament.currentBattles.length; i++) {
-				if (tournamentRoom.tournament.currentBattles[i].playerA === targetPlayer || tournamentRoom.tournament.currentBattles[i].playerB === targetPlayer) {
-					currentBattle = tournamentRoom.tournament.battleData[tournamentRoom.tournament.currentBattles[i].roomid];
+			for (const b of tournamentRoom.tournament.currentBattles) {
+				if (b.playerA === targetPlayer || b.playerB === targetPlayer) {
+					currentBattle = tournamentRoom.tournament.battleData[b.roomid];
 					break;
 				}
 			}
@@ -1398,12 +1377,12 @@ const commands: Dict<ICommandDefinition> = {
 			const option = toID(targets[0]);
 			const displayTimes = option === 'time' || option === 'times';
 			const now = Date.now();
-			for (let i = 0; i < database.pastTournaments.length; i++) {
-				const format = Dex.getFormat(database.pastTournaments[i].inputTarget);
-				let tournament = format ? Dex.getCustomFormatName(format, tournamentRoom) : database.pastTournaments[i].name;
+			for (const pastTournament of database.pastTournaments) {
+				const format = Dex.getFormat(pastTournament.inputTarget);
+				let tournament = format ? Dex.getCustomFormatName(format, tournamentRoom) : pastTournament.name;
 
 				if (displayTimes) {
-					let duration = now - database.pastTournaments[i].time;
+					let duration = now - pastTournament.time;
 					if (duration < 1000) duration = 1000;
 					tournament += " <i>(" + Tools.toDurationString(duration, {hhmmss: true}) + " ago)</i>";
 				}
@@ -1413,41 +1392,6 @@ const commands: Dict<ICommandDefinition> = {
 			this.sayHtml("<b>Past tournaments</b>" + (displayTimes ? "" : " (most recent first)") + ": " + Tools.joinList(names) + ".", tournamentRoom);
 		},
 		aliases: ['pasttours', 'recenttournaments', 'recenttours'],
-	},
-	lasttournament: {
-		command(target, room, user) {
-			const targets = target.split(',');
-			let tournamentRoom: Room;
-			if (this.isPm(room)) {
-				const targetRoom = Rooms.search(targets[0]);
-				if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-				targets.shift();
-				if (!Config.allowTournaments || !Config.allowTournaments.includes(targetRoom.id)) return this.sayError(['disabledTournamentFeatures', targetRoom.title]);
-				tournamentRoom = targetRoom;
-			} else {
-				if (!user.hasRank(room, 'voice')) return;
-				if (!Config.allowTournaments || !Config.allowTournaments.includes(room.id)) return this.sayError(['disabledTournamentFeatures', room.title]);
-				tournamentRoom = room;
-			}
-
-			const database = Storage.getDatabase(tournamentRoom);
-			if (!targets[0]) {
-				if (!database.lastTournamentTime) return this.say("No tournaments have been played in " + tournamentRoom.title + ".");
-				return this.say("The last tournament in " + tournamentRoom.title + " ended **" + Tools.toDurationString(Date.now() - database.lastTournamentTime) + "** ago.");
-			}
-			const format = Dex.getFormat(targets[0]);
-			if (!format) return this.sayError(['invalidFormat', target]);
-			if (!database.lastTournamentFormatTimes || !(format.id in database.lastTournamentFormatTimes)) return this.say(format.name + " has not been played in " + tournamentRoom.title + ".");
-			this.say("The last " + format.name + " tournament in " + tournamentRoom.title + " ended **" + Tools.toDurationString(Date.now() - database.lastTournamentFormatTimes[format.id]) + "** ago.");
-		},
-		aliases: ['lasttour'],
-	},
-	usercreatedformats: {
-		command(target, room, user) {
-			if (!this.isPm(room) && !user.hasRank(room, 'voice')) return;
-			this.say('Approved and user-created formats: http://pstournaments.weebly.com/formats.html');
-		},
-		aliases: ['userhostedformats', 'userformats'],
 	},
 	gettournamentapproval: {
 		command(target, room, user, cmd) {
@@ -1656,13 +1600,13 @@ const commands: Dict<ICommandDefinition> = {
 			const users: string[] = [];
 			const removeBits = cmd === 'removebits' || cmd === 'rbits';
 			let customBits: number | null = null;
-			for (let i = 0; i < targets.length; i++) {
-				const id = toID(targets[i]);
+			for (const t of targets) {
+				const id = toID(t);
 				if (!id) continue;
 				if (Tools.isInteger(id)) {
-					customBits = parseInt(targets[i].trim());
+					customBits = parseInt(t.trim());
 				} else {
-					users.push(targets[i]);
+					users.push(t);
 				}
 			}
 
@@ -1680,8 +1624,8 @@ const commands: Dict<ICommandDefinition> = {
 				bits = customBits;
 			}
 
-			for (let i = 0; i < users.length; i++) {
-				const user = Users.get(users[i]);
+			for (const [i, u] of users.entries()) {
+				const user = Users.get(u);
 				if (user) users[i] = user.name;
 				if (removeBits) {
 					Storage.removePoints(room, users[i], bits, 'manual');
@@ -1795,9 +1739,9 @@ const commands: Dict<ICommandDefinition> = {
 				this.say(database.leaderboard[targetUser].name + " has " + eventPoints + " points in" + (!multipleFormats ? " the" : "") + " " + database.eventInformation[event].name + " format" + (multipleFormats ? "s" : "") + ".");
 			} else {
 				const formatNames: string[] = [];
-				for (let i = 0; i < eventInformation.formatIds.length; i++) {
-					const format = Dex.getFormat(eventInformation.formatIds[i]);
-					formatNames.push(format ? format.name : eventInformation.formatIds[i]);
+				for (const formatid of database.eventInformation[event].formatIds!) {
+					const format = Dex.getFormat(formatid);
+					formatNames.push(format ? format.name : formatid);
 				}
 				this.say("The format" + (multipleFormats ? "s" : "") + " for " + database.eventInformation[event].name + " " + (multipleFormats ? "are " : "is ") + Tools.joinList(formatNames) + ".");
 			}
@@ -1901,190 +1845,6 @@ const commands: Dict<ICommandDefinition> = {
 			if (!(id in database.botGreetings)) return this.say(this.sanitizeResponse(targets[1].trim() + " does not have a greeting stored for " + targetRoom.title + "."));
 			delete database.botGreetings[id];
 			this.say(this.sanitizeResponse(targets[1].trim() + "'s greeting in " + targetRoom.title + " has been removed."));
-		},
-	},
-	logs: {
-		async asyncCommand(target, room, user) {
-			if (!this.isPm(room)) return;
-			const targets = target.split(",");
-			if (targets.length < 3) return this.say("You must specify at least a room, a user, and a start date or phrase.");
-			const targetRoom = Rooms.search(targets[0]);
-			if (!targetRoom) return this.sayError(['invalidBotRoom', targets[0]]);
-			if (!user.isDeveloper() && !user.hasRank(targetRoom, 'driver')) return;
-			if (!user.rooms.has(targetRoom)) return this.sayError(['noPmHtmlRoom', targetRoom.title]);
-			targets.shift();
-
-			let phrases: string[] | null = null;
-			const userParts = targets[0].split("|");
-			let userids: string[] | null = null;
-			let anyUser = false;
-			for (let i = 0; i < userParts.length; i++) {
-				if (userParts[i].trim() === '*') {
-					anyUser = true;
-					continue;
-				}
-				const id = toID(userParts[i]);
-				if (!id) continue;
-				if (!Tools.isUsernameLength(userParts[i])) return this.say("You have included an invalid username (" + userParts[0].trim() + ").");
-				if (!userids) userids = [];
-				userids.push(id);
-			}
-			targets.shift();
-
-			let autoStartYear = false;
-			let autoEndYear = false;
-			const date = new Date();
-			const currentYear = date.getFullYear();
-			const currentMonth = date.getMonth() + 1;
-			const currentDate = date.getDate();
-			let startDate: number[] = [];
-			let endDate: number[] = [];
-			for (let i = 0; i < targets.length; i++) {
-				if (!toID(targets[i])) continue;
-				const target = targets[i].trim();
-				if (target.includes("/") && (!startDate.length || !endDate.length)) {
-					// startDate-endDate
-					if (target.includes("-")) {
-						const parts = target.split("-");
-						const startExtracted = Tools.toDateArray(parts[0], true);
-						const endExtracted = Tools.toDateArray(parts[1]);
-						if (startExtracted && endExtracted) {
-							startDate = startExtracted;
-							endDate = endExtracted;
-							if (startDate.length === 2) {
-								startDate.unshift(currentYear);
-								autoStartYear = true;
-							}
-							if (endDate.length === 2) {
-								endDate.unshift(currentYear);
-								autoEndYear = true;
-							}
-						}
-					} else {
-						const startExtracted = Tools.toDateArray(target, true);
-						if (startExtracted) {
-							startDate = startExtracted;
-							if (startDate.length === 2) {
-								startDate.unshift(currentYear);
-								autoStartYear = true;
-							}
-						}
-					}
-				} else {
-					if (!phrases) phrases = [];
-					phrases.push(target.toLowerCase());
-				}
-			}
-
-			const roomDirectory = path.join(Tools.roomLogsFolder, targetRoom.id);
-			let years: string[] = [];
-			try {
-				years = fs.readdirSync(roomDirectory);
-			} catch (e) {
-				return this.say("Chat logging is not enabled for " + targetRoom.id + ".");
-			}
-			const numberYears = years.map(x => parseInt(x));
-			const firstLoggedYear = numberYears.sort((a, b) => a - b)[0];
-			const days = fs.readdirSync(roomDirectory + "/" + firstLoggedYear);
-			const months: Dict<number[]> = {};
-			for (let i = 0; i < days.length; i++) {
-				if (!days[i].endsWith('.txt')) continue;
-				const parts = days[i].split(".")[0].split('-');
-				const month = parts[1];
-				if (!(month in months)) months[month] = [];
-				months[month].push(parseInt(parts[2]));
-			}
-			const numberMonths = Object.keys(months);
-			const firstLoggedMonthString = numberMonths.sort((a, b) => parseInt(a) - parseInt(b))[0];
-			const firstLoggedDay = months['' + firstLoggedMonthString].sort((a, b) => a - b)[0];
-			const firstLoggedMonth = parseInt(firstLoggedMonthString);
-			if (!startDate.length) {
-				startDate = [firstLoggedYear, firstLoggedMonth, firstLoggedDay];
-			} else {
-				if (startDate[0] > currentYear) return this.say("You cannot search past the current year.");
-				if (autoStartYear && startDate[0] === currentYear && startDate[1] > currentMonth) startDate[0]--;
-				if (startDate[0] === currentYear) {
-					if (startDate[1] > currentMonth) return this.say("You cannot search past the current month.");
-					if (startDate[1] === currentMonth) {
-						if (startDate[2] > currentDate) return this.say("You cannot search past the current day.");
-					}
-				}
-
-				if (startDate[0] < firstLoggedYear) return this.say("There are no chat logs from before " + firstLoggedYear + ".");
-				if (startDate[0] === firstLoggedYear) {
-					if (startDate[1] < firstLoggedMonth) return this.say("There are no chat logs from before " + firstLoggedMonth + "/" + firstLoggedYear + ".");
-					if (startDate[1] === firstLoggedMonth) {
-						if (startDate[2] < firstLoggedDay) return this.say("There are no chat logs from before " + firstLoggedMonth + "/" + firstLoggedDay + "/" + firstLoggedYear + ".");
-					}
-				}
-			}
-
-			if (!endDate.length) {
-				endDate = [currentYear, currentMonth, currentDate];
-			} else {
-				if (endDate[0] > currentYear) return this.say("You cannot search past the current year.");
-				if (autoEndYear && endDate[0] === currentYear && endDate[1] > currentMonth) endDate[0]--;
-				if (endDate[0] === currentYear) {
-					if (endDate[1] > currentMonth) return this.say("You cannot search past the current month.");
-					if (endDate[1] === currentMonth) {
-						if (endDate[2] > currentDate) return this.say("You cannot search past the current day.");
-					}
-				}
-
-				if (endDate[0] < firstLoggedYear) return this.say("There are no chat logs from before " + firstLoggedYear + ".");
-				if (endDate[0] === firstLoggedYear) {
-					if (endDate[1] < firstLoggedMonth) return this.say("There are no chat logs from before " + firstLoggedMonth + "/" + firstLoggedYear + ".");
-					if (endDate[1] === firstLoggedMonth) {
-						if (endDate[2] < firstLoggedDay) return this.say("There are no chat logs from before " + firstLoggedDay + "/" + firstLoggedMonth + "/" + firstLoggedYear + ".");
-					}
-				}
-			}
-
-			if (startDate[0] > endDate[0]) return this.say("You must enter the search dates in sequential order.");
-			if (startDate[0] === endDate[0]) {
-				if (startDate[1] > endDate[1]) return this.say("You must enter the search dates in sequential order.");
-				if (startDate[1] === endDate[1]) {
-					if (startDate[2] > endDate[2]) return this.say("You must enter the search dates in sequential order.");
-				}
-			}
-
-			if (!userids && !phrases) return this.say("You must include at least one user or phrase in your search.");
-			if (anyUser && userids) return this.say("You cannot search for both a specific user and any user.");
-			if (phrases) {
-				for (let i = 0; i < phrases.length; i++) {
-					if (phrases[i].length === 1) return this.say("You cannot search for a single character.");
-				}
-			}
-			if (CommandParser.reloadInProgress) return this.sayError(['reloadInProgress']);
-
-			const userId = user.id;
-			if (Storage.workers.logs.requestsByUserid.includes(userId)) return this.say("You can only perform 1 search at a time.");
-
-			const displayStartDate = startDate.slice(1);
-			displayStartDate.push(startDate[0]);
-			const displayEndDate = endDate.slice(1);
-			displayEndDate.push(endDate[0]);
-			let text = "Retrieving chat logs from " + displayStartDate.join("/") + " to " + displayEndDate.join("/");
-			if (userids) {
-				text += " for the user '" + userids.join("|") + "'" + (phrases ? " containing the phrase '" + phrases.join("|") + "'" : "");
-			} else if (phrases) {
-				text += " containing the phrase '" + phrases.join("|") + "'";
-			}
-			text += "...";
-			this.say(text);
-			Storage.workers.logs.requestsByUserid.push(userId);
-			const result = await Storage.workers.logs.search({
-				endDate,
-				phrases,
-				roomid: targetRoom.id,
-				showCommands: (Config.allowScriptedGames && Config.allowScriptedGames.includes(targetRoom.id)) || (Config.allowUserHostedGames && Config.allowUserHostedGames.includes(targetRoom.id)) ? true : false,
-				startDate,
-				userids,
-			});
-
-			this.sayHtml("<details><summary>Found <b>" + result.totalLines + "</b> line" + (result.totalLines === 1 ? "" : "s") + ":</summary><br>" + result.lines.join("<br />") + "</details>", targetRoom);
-
-			Storage.workers.logs.requestsByUserid.splice(Storage.workers.logs.requestsByUserid.indexOf(userId), 1);
 		},
 	},
 };

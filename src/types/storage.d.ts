@@ -94,6 +94,30 @@ interface IOfflineMessage {
 }
 
 export interface IGlobalDatabase {
-	lastSeen?: Dict<number>;
 	offlineMessages?: Dict<IOfflineMessage[]>;
+}
+
+interface IAuctions {
+	auctions: {
+		[k: string]: {
+			name: string;
+			startMoney: number;
+			owners: string[];
+			rooms: string[];
+			managers: {};
+			teams: {};
+			running: boolean;
+			allowNom: string;
+			nomOrder: string[];
+			nomQueue: string[];
+			nommedPlayer: string;
+			bid: number;
+			bidder: string;
+			players: {};
+		};
+	};
+}
+
+export interface IAuctionDatabase {
+	rooms: Dict<IAuctions>;
 }

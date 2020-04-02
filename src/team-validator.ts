@@ -9,7 +9,7 @@ type ID = string;
 
 /**
  * Team Validator
- * Pokemon Showdown - http://pokemonshowdown.com/
+ * Pokemon Showdown - https://pokemonshowdown.com/
  *
  * Handles team validation, and specifically learnset checking.
  *
@@ -26,7 +26,7 @@ type ID = string;
  *
  * - E = egg, 3rd char+ is the father in gen 2-5, empty in gen 6-7
  *   because egg moves aren't restricted to fathers anymore
- * - S = event, 3rd char+ is the index in .eventPokemon
+ * - S = event, 3rd char+ is the index in .eventData
  * - D = Dream World, only 5D is valid
  * - V = Virtual Console transfer, only 7V is valid
  *
@@ -239,7 +239,7 @@ export class TeamValidator {
 		const dex = this.dex;
 		if (!setSources.size()) throw new Error(`Bad sources passed to checkLearnset`);
 
-		const moveid = Tools.toId(move);
+		const moveid = toID(move);
 		move = dex.getMove(moveid)!;
 		const baseTemplate = dex.getTemplate(species)!;
 		let template: Template | null = baseTemplate;

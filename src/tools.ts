@@ -8,7 +8,6 @@ import util = require('util');
 import { PRNG } from './prng';
 import { HexColor, IHexColor } from './types/global-types';
 import { User } from './users';
-import { IParam } from './workers/parameters';
 
 const exec = util.promisify(childProcess.exec);
 
@@ -228,15 +227,6 @@ export class Tools {
 		}
 
 		return temp;
-	}
-
-	intersectParams(params: IParam[], dexes: Dict<Dict<readonly string[]>>): string[] {
-		let intersection: string[] = dexes[params[0].type][params[0].param].slice();
-		for (let i = 1; i < params.length; i++) {
-			intersection = this.intersectArrays(intersection, dexes[params[i].type][params[i].param]);
-			if (!intersection.length) break;
-		}
-		return intersection;
 	}
 
 	toId(input: string | number | {id: string} | undefined): string {

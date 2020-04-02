@@ -45,10 +45,6 @@ try {
 
 	console.log("Loading data for tests...");
 	Dex.loadData();
-	for (const i in Games.formats) {
-		const game = Games.createGame(mochaRoom, Games.getExistingFormat(i));
-		game.deallocate(true);
-	}
 
 	for (let i = 0; i < moduleTests.length; i++) {
 		require(path.join(modulesDir, moduleTests[i]));

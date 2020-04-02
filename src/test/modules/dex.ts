@@ -46,8 +46,8 @@ describe("Dex", () => {
 		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.species);
 		pokemon = Dex.getExistingPokemon('Rotom-Frost');
 		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.species);
-		pokemon = Dex.getExistingPokemon('Pikachu-Gmax');
-		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.species);
+		// pokemon = Dex.getExistingPokemon('Pikachu-Gmax');
+		// assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.species);
 
 		const houndour = Dex.getExistingPokemon('Houndour');
 		const houndoomMega = Dex.getExistingPokemon('Houndoom-Mega');
@@ -84,7 +84,7 @@ describe("Dex", () => {
 
 		const categoryKeys = Object.keys(Dex.data.categories);
 		for (let i = 0; i < categoryKeys.length; i++) {
-			assert(Tools.toId(categoryKeys[i]) === categoryKeys[i], categoryKeys[i] + " should be an ID in categories.js");
+			assert(toID(categoryKeys[i]) === categoryKeys[i], categoryKeys[i] + " should be an ID in categories.js");
 			assert(categoryKeys.indexOf(categoryKeys[i]) === i, "Duplicate category for " + categoryKeys[i]);
 		}
 	});

@@ -1,8 +1,7 @@
 import { Client } from './client';
 import { CommandParser, CommandsDict } from './command-parser';
 import * as config from './config-example';
-import { Dex} from './dex';
-import { Games } from './games';
+import { Dex } from './dex';
 import { Rooms } from './rooms';
 import { Storage } from './storage';
 import { Tools } from './tools';
@@ -17,7 +16,6 @@ declare global {
 	const Commands: CommandsDict;
 	const Config: Partial<typeof config>;
 	const Dex: Dex;
-	const Games: Games;
 	const Rooms: Rooms;
 	const Storage: Storage;
 	const tempConfig: boolean;

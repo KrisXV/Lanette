@@ -595,34 +595,38 @@ export interface ITemplateData {
 	weightkg: number;
 	baseForme?: string;
 	baseSpecies?: string;
+	battleOnly?: string | string[];
 	evoLevel?: number;
 	evoMove?: string;
 	evoType?: string;
 	evos?: string[];
 	forme?: string;
+	gen?: number;
 	gender?: 'M' | 'F' | 'N' | '';
 	genderRatio?: {[k: string]: number};
-	inheritsFrom?: string | string[];
+	inheritsFrom?: string;
 	maxHP?: number;
 	otherForms?: string[];
 	otherFormes?: string[];
 	prevo?: string;
+	requiredItem?: string;
+	requiredItems?: string[];
+	requiredAbility?: string;
+	requiredMove?: string;
+	isGigantamax?: string;
 }
 
 export interface ILearnset {
-	learnset: Dict<string[]>;
+	learnset?: Dict<string[]>;
+	eventOnly?: boolean;
+	eventData?: IEventInfo[];
 }
 
 export interface ITemplateFormatsData {
-	battleOnly?: boolean;
 	comboMoves?: string[];
 	doublesTier?: string;
 	essentialMove?: string;
-	eventOnly?: boolean;
-	eventPokemon?: IEventInfo[];
 	exclusiveMoves?: string[];
-	gen?: number;
-	isGigantamax?: string;
 	isNonstandard?: Nonstandard;
 	isUnreleased?: boolean;
 	maleOnlyHidden?: boolean;
@@ -634,10 +638,6 @@ export interface ITemplateFormatsData {
 	}[];
 	randomBattleMoves?: string[];
 	randomDoubleBattleMoves?: string[];
-	requiredAbility?: string;
-	requiredItem?: string;
-	requiredItems?: string[];
-	requiredMove?: string;
 	tier?: string;
 	unreleasedHidden?: boolean;
 }
@@ -645,7 +645,7 @@ export interface ITemplateFormatsData {
 export interface IPokemonComputed {
 	allPossibleMoves: string[];
 	baseSpecies: string;
-	battleOnly?: boolean;
+	battleOnly?: string | string[];
 	category: string;
 	effectType: "Pokemon";
 	evos: string[];
@@ -654,12 +654,13 @@ export interface IPokemonComputed {
 	genderRatio: NonNullable<ITemplateData["genderRatio"]>;
 	id: string;
 	isForme: boolean;
+	isGigantamax?: string;
 	isMega: boolean;
 	isNonstandard?: Nonstandard;
 	isPrimal: boolean;
 	name: string;
 	nfe: boolean;
-	requiredItems: string[] | undefined;
+	requiredItems?: string[];
 	shiny: boolean;
 	speciesid: string;
 	spriteId: string;
@@ -672,7 +673,7 @@ export interface IPokemonCopy extends ITemplateData, Partial<ILearnset>, ITempla
 	forme: string;
 	gen: number;
 	genderRatio: NonNullable<ITemplateData["genderRatio"]>;
-	requiredItems: string[] | undefined;
+	requiredItems?: string[];
 	tier: string;
 }
 

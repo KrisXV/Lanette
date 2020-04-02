@@ -2,7 +2,7 @@ import fs = require('fs');
 import path = require('path');
 
 import { Room } from './rooms';
-import { IDatabase, IGlobalDatabase } from './types/storage';
+import { IAuctionDatabase, IDatabase, IGlobalDatabase } from './types/storage';
 import { User } from './users';
 import { LogsWorker } from './workers/logs';
 
@@ -11,6 +11,7 @@ const LAST_SEEN_EXPIRATION = 30 * 24 * 60 * 60 * 1000;
 const OFFLINE_MESSAGE_EXPIRATION = 30 * 24 * 60 * 60 * 1000;
 
 const globalDatabaseId = 'globalDB';
+const auctionDatabaseId = 'auctions';
 const hostingDatabaseSuffix = '-hostingDB';
 const archivedDatabasesDir = path.join(Tools.rootFolder, 'archived-databases');
 const databasesDir = path.join(Tools.rootFolder, 'databases');
@@ -21,10 +22,7 @@ interface IStorageWorkers {
 }
 
 export class Storage {
-	chatLogFilePathCache: Dict<string> = {};
-	chatLogRolloverTimes: Dict<number> = {};
 	databases: Dict<IDatabase> = {};
-	lastSeenExpirationDuration = Tools.toDurationString(LAST_SEEN_EXPIRATION);
 	loadedDatabases: boolean = false;
 	workers: IStorageWorkers = {
 		logs: new LogsWorker(),
@@ -36,9 +34,7 @@ export class Storage {
 		this.globalDatabaseExportInterval = this.setGlobalDatabaseExportInterval();
 	}
 
-	onReload(previous: Partial<Storage>): void {
-		if (previous.chatLogFilePathCache) this.chatLogFilePathCache = previous.chatLogFilePathCache;
-		if (previous.chatLogRolloverTimes) this.chatLogRolloverTimes = previous.chatLogRolloverTimes;
+	onReload(previous: Partial<Storage>) {
 		if (previous.databases) this.databases = previous.databases;
 		if (previous.loadedDatabases) this.loadedDatabases = previous.loadedDatabases;
 
@@ -67,6 +63,11 @@ export class Storage {
 		return this.databases[globalDatabaseId] as IGlobalDatabase;
 	}
 
+	getAuctionDatabase(): IAuctionDatabase {
+		if (!(auctionDatabaseId in this.databases)) this.databases[auctionDatabaseId] = {};
+		return this.databases[auctionDatabaseId] as IAuctionDatabase;
+	}
+
 	getHostingDatabase(room: Room): IDatabase {
 		const id = room.id + hostingDatabaseSuffix;
 		if (!(id in this.databases)) this.databases[id] = {};
@@ -79,7 +80,13 @@ export class Storage {
 		Tools.safeWriteFileSync(path.join(databasesDir, roomid + '.json'), contents);
 	}
 
-	archiveDatabase(roomid: string): void {
+	exportAuctionDatabase() {
+		if (!(auctionDatabaseId in this.databases)) return;
+		const contents = JSON.stringify(this.databases[auctionDatabaseId]);
+		Tools.safeWriteFileSync(path.join(databasesDir, auctionDatabaseId + '.json'), contents);
+	}
+
+	archiveDatabase(roomid: string) {
 		if (!(roomid in this.databases) || roomid.startsWith('battle-') || roomid.startsWith('groupchat-')) return;
 		const date = new Date();
 		const year = date.getFullYear();
@@ -103,12 +110,6 @@ export class Storage {
 		}
 
 		const globalDatabase = this.getGlobalDatabase();
-		if (globalDatabase.lastSeen) {
-			const now = Date.now();
-			for (const i in globalDatabase.lastSeen) {
-				if (now - globalDatabase.lastSeen[i] > LAST_SEEN_EXPIRATION) delete globalDatabase.lastSeen[i];
-			}
-		}
 
 		this.loadedDatabases = true;
 	}
@@ -169,9 +170,9 @@ export class Storage {
 		const database = this.getDatabase(room);
 		if (!database.leaderboard) database.leaderboard = {};
 		name = Tools.toAlphaNumeric(name);
-		const id = Tools.toId(name);
+		const id = toID(name);
 		if (!id) return;
-		source = Tools.toId(source);
+		source = toID(source);
 		if (!source) return;
 		if (!(id in database.leaderboard)) {
 			this.createLeaderboardEntry(database, name, id);
@@ -189,9 +190,9 @@ export class Storage {
 		const database = this.getDatabase(room);
 		if (!database.leaderboard) return;
 		name = Tools.toAlphaNumeric(name);
-		const id = Tools.toId(name);
+		const id = toID(name);
 		if (!(id in database.leaderboard)) return;
-		source = Tools.toId(source);
+		source = toID(source);
 		if (!source) return;
 		database.leaderboard[id].name = name;
 		database.leaderboard[id].current -= amount;
@@ -204,8 +205,8 @@ export class Storage {
 
 	transferData(roomid: string, source: string, destination: string): boolean {
 		if (!(roomid in this.databases)) return false;
-		const sourceId = Tools.toId(source);
-		const destinationId = Tools.toId(destination);
+		const sourceId = toID(source);
+		const destinationId = toID(destination);
 		if (!sourceId || !destinationId || sourceId === destinationId) return false;
 		const database = this.databases[roomid];
 		if (database.leaderboard && sourceId in database.leaderboard) {
@@ -244,27 +245,7 @@ export class Storage {
 		return true;
 	}
 
-	logChatMessage(room: Room, time: number, messageType: string, message: string): void {
-		const date = new Date(time);
-		if (!this.chatLogRolloverTimes[room.id] || time >= this.chatLogRolloverTimes[room.id]) {
-			const midnight = new Date();
-			midnight.setHours(24, 0, 0, 0);
-			this.chatLogRolloverTimes[room.id] = midnight.getTime();
-			const year = date.getFullYear();
-			const month = date.getMonth() + 1;
-			const day = date.getDate();
-			const directory = path.join(Tools.roomLogsFolder, room.id, '' + year);
-			try {
-				fs.mkdirSync(directory, {recursive: true});
-			// eslint-disable-next-line no-empty
-			} catch {}
-			const filename = year + '-' + (month < 10 ? '0' : '') + month + '-' + (day < 10 ? '0' : '') + day + '.txt';
-			this.chatLogFilePathCache[room.id] = path.join(directory, filename);
-		}
-		fs.appendFileSync(this.chatLogFilePathCache[room.id], Tools.toTimestampString(date).split(" ")[1] + ' |' + messageType + '|' + message + "\n");
-	}
-
-	getMaxOfflineMessageLength(sender: User): number {
+	getMaxOfflineMessageLength(sender: User, message: string): number {
 		return Tools.maxMessageLength - (baseOfflineMessageLength + sender.name.length);
 	}
 
@@ -272,10 +253,10 @@ export class Storage {
 		const database = this.getGlobalDatabase();
 		if (!database.offlineMessages) database.offlineMessages = {};
 		if (recipientId in database.offlineMessages) {
-			const senderId = Tools.toId(sender);
+			const senderId = toID(sender);
 			let queuedMessages = 0;
 			for (let i = 0; i < database.offlineMessages[recipientId].length; i++) {
-				if (!database.offlineMessages[recipientId][i].readTime && Tools.toId(database.offlineMessages[recipientId][i].sender) === senderId) queuedMessages++;
+				if (!database.offlineMessages[recipientId][i].readTime && toID(database.offlineMessages[recipientId][i].sender) === senderId) queuedMessages++;
 			}
 			if (queuedMessages > MAX_QUEUED_OFFLINE_MESSAGES) return false;
 		} else {
@@ -337,11 +318,5 @@ export class Storage {
 		}
 		room.say(database.botGreetings[user.id].greeting);
 		return true;
-	}
-
-	updateLastSeen(user: User, time: number): void {
-		const database = this.getGlobalDatabase();
-		if (!database.lastSeen) database.lastSeen = {};
-		database.lastSeen[user.id] = time;
 	}
 }

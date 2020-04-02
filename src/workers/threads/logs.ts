@@ -27,14 +27,14 @@ function search(options: ILogsSearchOptions): ILogsResponse {
 	const roomDirectory = path.join(data.roomLogsFolder, options.roomid);
 	const userIds: Dict<string> = {};
 	for (let i = startYear; i <= endYear; i++) {
-		const year = '' + i;
+		const year = `${i}`;
 		const firstYear = i === startYear;
 		const lastYear = i === endYear;
 		const yearDirectory = path.join(roomDirectory, year);
 		const dayFiles = fs.readdirSync(yearDirectory).sort();
-		for (let i = 0; i < dayFiles.length; i++) {
-			if (!dayFiles[i].endsWith('.txt')) continue;
-			let date = dayFiles[i].substr(0, dayFiles[i].indexOf('.txt'));
+		for (const dayFile of dayFiles) {
+			if (!dayFile.endsWith('.txt')) continue;
+			let date = dayFile.substr(0, dayFile.indexOf('.txt'));
 			let hyphenIndex = date.indexOf("-");
 
 			// skip year
@@ -50,11 +50,11 @@ function search(options: ILogsSearchOptions): ILogsResponse {
 			if (lastYear) {
 				if (monthNumber > options.endDate[1] || (monthNumber === options.endDate[1] && parseInt(day) > options.endDate[2])) continue;
 			}
-			const logs = fs.readFileSync(path.join(yearDirectory, dayFiles[i])).toString().split("\n");
+			const logs = fs.readFileSync(path.join(yearDirectory, dayFile)).toString().split("\n");
 			const dayLines: string[] = [];
-			for (let i = 0; i < logs.length; i++) {
-				if (logs[i].substr(9, 3) !== '|c|') continue;
-				const line = logs[i].substr(12);
+			for (const log of logs) {
+				if (log.substr(9, 3) !== '|c|') continue;
+				const line = log.substr(12);
 				const pipeIndex = line.indexOf("|");
 				const name = line.substr(1, pipeIndex - 1);
 				if (!(name in userIds)) userIds[name] = Tools.toId(name);
@@ -80,13 +80,12 @@ function search(options: ILogsSearchOptions): ILogsResponse {
 				dayLines.push(message);
 			}
 
-			const dayLinesLen = dayLines.length;
-			if (dayLinesLen) {
+			if (dayLines.length) {
 				let regular = 0;
 				let commands = 0;
 				if (options.showCommands) {
-					for (let i = 0; i < dayLinesLen; i++) {
-						const firstCharacter = dayLines[i].charAt(0);
+					for (const dayLine of dayLines) {
+						const firstCharacter = dayLine.charAt(0);
 						if ((data.commandCharacter && firstCharacter === data.commandCharacter) || firstCharacter === '!') {
 							commands++;
 						} else {
@@ -94,12 +93,12 @@ function search(options: ILogsSearchOptions): ILogsResponse {
 						}
 					}
 				} else {
-					regular = dayLinesLen;
+					regular = dayLines.length;
 				}
 				if (!(year in separatedLogs)) separatedLogs[year] = {};
 				if (!(month in separatedLogs[year])) separatedLogs[year][month] = {};
 				separatedLogs[year][month][day] = {regular, commands};
-				totalLines += dayLinesLen;
+				totalLines += dayLines.length;
 			}
 		}
 
@@ -107,22 +106,22 @@ function search(options: ILogsSearchOptions): ILogsResponse {
 		if (!(year in separatedLogs)) continue;
 
 		const monthsOrder = Object.keys(separatedLogs[year]).sort((a, b) => parseInt(a) - parseInt(b));
-		for (let i = 0; i < monthsOrder.length; i++) {
-			const month = monthsOrder[i];
+		for (const month of monthsOrder) {
 			const monthLen = month.length;
 			const daysOrder = Object.keys(separatedLogs[year][month]).sort((a, b) => parseInt(a) - parseInt(b));
-			for (let i = 0; i < daysOrder.length; i++) {
-				const day = daysOrder[i];
-				let line = "";
+			for (const day of daysOrder) {
+				let line = ``;
 				if (data.serverLogsViewer) {
-					line += "<a href='" + data.serverLogsViewer + options.roomid + "/" + year + "-" + (monthLen > 1 ? month : '0' + month) + "-" + (day.length > 1 ? day : '0' + day) + ".html'>" + month + "/" + day + "/" + year + "</a>:";
+					line += `<a href="${data.serverLogsViewer}${options.roomid}/${year}-${monthLen > 1 ? month : `0${month}`}-${day.length > 1 ? day : `0${day}`}.html">${month}/${day}/${year}</a>:`;
 				} else {
-					line += month + "/" + day + "/" + year + ":";
+					line += `${month}/${day}/${year}:`;
 				}
-				if (separatedLogs[year][month][day].regular) line += " <b>" + separatedLogs[year][month][day].regular + "</b> line" + (separatedLogs[year][month][day].regular !== 1 ? "s" : "");
+				if (separatedLogs[year][month][day].regular) {
+					line += ` <b>${separatedLogs[year][month][day].regular}</b> line${separatedLogs[year][month][day].regular !== 1 ? `s` : ``}`;
+				}
 				if (separatedLogs[year][month][day].commands) {
-					if (separatedLogs[year][month][day].regular) line += ",";
-					line += " <b>" + separatedLogs[year][month][day].commands + "</b> command" + (separatedLogs[year][month][day].commands !== 1 ? "s" : "");
+					if (separatedLogs[year][month][day].regular) line += `,`;
+					line += ` <b>${separatedLogs[year][month][day].commands}</b> command${separatedLogs[year][month][day].commands !== 1 ? `s` : ``}`;
 				}
 				lines.push(line);
 			}

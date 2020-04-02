@@ -22,9 +22,6 @@ import commands = require('./commands');
 global.Commands = CommandParser.loadBaseCommands(commands);
 global.BaseCommands = Tools.deepClone(global.Commands);
 
-import * as games from './games';
-global.Games = new games.Games();
-
 import * as rooms from './rooms';
 global.Rooms = new rooms.Rooms();
 
@@ -38,5 +35,4 @@ import * as users from './users';
 global.Users = new users.Users();
 
 Tournaments.loadSchedules();
-Games.loadFormats();
 Storage.importDatabases();

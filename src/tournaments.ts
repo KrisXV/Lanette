@@ -274,7 +274,7 @@ export class Tournaments {
 			if (database.pastTournaments) {
 				for (let i = 0; i < database.pastTournaments.length; i++) {
 					const format = Dex.getFormat(database.pastTournaments[i].inputTarget);
-					pastTournamentIds.push(format ? format.id : Tools.toId(database.pastTournaments[i].name));
+					pastTournamentIds.push(format ? format.id : toID(database.pastTournaments[i].name));
 				}
 			}
 
@@ -431,12 +431,12 @@ export class Tournaments {
 		}
 
 		const format = Dex.getFormat(input);
-		const formatId = format ? format.id : Tools.toId(input);
+		const formatId = format ? format.id : toID(input);
 
 		for (let i = 0; i < pastTournaments.length; i++) {
 			const pastFormat = Dex.getFormat(pastTournaments[i].inputTarget);
 			if (pastFormat && pastFormat.quickFormat) continue;
-			const id = pastFormat ? pastFormat.id : Tools.toId(pastTournaments[i].name);
+			const id = pastFormat ? pastFormat.id : toID(pastTournaments[i].name);
 			if (formatId === id) return true;
 		}
 

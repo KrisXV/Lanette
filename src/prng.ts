@@ -1,6 +1,6 @@
 /**
  * PRNG
- * Pokemon Showdown - http://pokemonshowdown.com/
+ * Pokemon Showdown - https://pokemonshowdown.com/
  *
  * This file handles the random number generator for battles.
  *

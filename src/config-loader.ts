@@ -3,7 +3,7 @@ function arrayToRoomIds(array: string[]): string[] {
 }
 
 function arrayToIds(array: string[]): string[] {
-	return array.map(x => Tools.toId(x));
+	return array.map(x => toID(x));
 }
 
 function objectKeysToRoomId<T>(object: Dict<T>): Dict<T> {
@@ -47,10 +47,9 @@ export function load(config: typeof Config): typeof Config {
 		Object.assign(config, config.tempConfig);
 	}
 
-	if (config.developers) config.developers = config.developers.map(x => Tools.toId(x));
+	if (config.developers) config.developers = config.developers.map(x => toID(x));
 
 	if (config.rooms) config.rooms = config.rooms.map(x => Tools.toRoomId(x));
-	if (config.disallowChatLogging) config.disallowChatLogging = arrayToRoomIds(config.disallowChatLogging);
 	if (config.roomAliases) config.roomAliases = objectKeysToRoomId(stringObjectToRoomIds(config.roomAliases));
 
 	if (config.allowScriptedGames) config.allowScriptedGames = arrayToRoomIds(config.allowScriptedGames);

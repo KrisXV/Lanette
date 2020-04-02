@@ -1,7 +1,5 @@
 import nodeAssert = require('assert');
 
-import { Player } from '../room-activity';
-import { Game } from '../room-game';
 import { Room } from '../rooms';
 import { User } from '../users';
 
@@ -36,34 +34,7 @@ export function assertClientSendQueue(startingSendQueueIndex: number, input: rea
 	assert(expected.length === 0, "Not found in Client's send queue:\n\n" + expected.join("\n"));
 }
 
-export function addPlayer(game: Game, name: string): Player {
-	const user = Users.add(name, Tools.toId(name));
-	assert(user);
-	user.rooms.set(game.room as Room, {lastChatMessage: Date.now(), rank: ' '});
-
-	const player = game.addPlayer(user);
-	assert(player);
-
-	return player;
-}
-
-export function addPlayers(game: Game, numberOrNames?: number | string[]): Player[] {
-	const players: Player[] = [];
-	if (Array.isArray(numberOrNames)) {
-		for (let i = 0; i < numberOrNames.length; i++) {
-			players.push(addPlayer(game, numberOrNames[i]));
-		}
-	} else {
-		if (!numberOrNames) numberOrNames = game.minPlayers;
-		for (let i = 1; i <= numberOrNames; i++) {
-			players.push(addPlayer(game, basePlayerName + ' ' + i));
-		}
-	}
-
-	return players;
-}
-
 export async function runCommand(command: string, target: string, room: Room | User, user: User | string): Promise<void> {
-	if (typeof user === 'string') user = Users.add(user, Tools.toId(user));
+	if (typeof user === 'string') user = Users.add(user, toID(user));
 	await CommandParser.parse(room, user, Config.commandCharacter + command + (target ? " " + target : ""));
 }

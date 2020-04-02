@@ -19,7 +19,7 @@ export class Player {
 
 	constructor(user: User | string, activity: Activity) {
 		if (typeof user === 'string') {
-			this.id = Tools.toId(user);
+			this.id = toID(user);
 			this.name = user;
 		} else {
 			this.id = user.id;
@@ -66,7 +66,7 @@ export class PlayerTeam {
 
 	constructor(name: string) {
 		this.name = name;
-		this.id = Tools.toId(name);
+		this.id = toID(name);
 	}
 
 	getPlayerNames(): string[] {
@@ -115,7 +115,7 @@ export abstract class Activity {
 	}
 
 	createPlayer(user: User | string): Player | void {
-		const id = Tools.toId(user);
+		const id = toID(user);
 		if (id in this.players) return;
 		const player = new Player(user, this);
 		this.players[id] = player;
@@ -135,7 +135,7 @@ export abstract class Activity {
 	}
 
 	destroyPlayer(user: User | string, forceDelete?: boolean): Player | void {
-		const id = Tools.toId(user);
+		const id = toID(user);
 		if (!(id in this.players)) return;
 		const player = this.players[id];
 		if (this.started && !forceDelete) {
@@ -191,7 +191,7 @@ export abstract class Activity {
 
 	onUhtml(name: string, html: string, listener: () => void): void {
 		if (this.ended) return;
-		const id = Tools.toId(name);
+		const id = toID(name);
 		if (!(id in this.uhtmlMessageListeners)) this.uhtmlMessageListeners[id] = [];
 		this.uhtmlMessageListeners[id].push(html);
 		this.room.onUhtml(name, html, listener);

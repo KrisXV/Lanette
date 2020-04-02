@@ -1,5 +1,4 @@
 import { GroupName } from "./client";
-import { Game } from "./room-game";
 import { Room } from "./rooms";
 
 interface IUserRoomData {
@@ -11,7 +10,6 @@ const chatFormatting: string[] = ["*", "_", "`", "~", "^", "\\"];
 
 export class User {
 	away: boolean | null = null;
-	game: Game | null = null;
 	group: string | null = null;
 	rooms = new Map<Room, IUserRoomData>();
 	status: string | null = null;
@@ -48,7 +46,7 @@ export class User {
 
 	isIdleStatus(): boolean {
 		if (!this.status) return false;
-		const status = Tools.toId(this.status);
+		const status = toID(this.status);
 		return !(status === 'busy' || status === 'idle' || status === 'away');
 	}
 
@@ -74,36 +72,36 @@ export class User {
 
 	on(message: string, listener: () => void): void {
 		if (!this.messageListeners) this.messageListeners = {};
-		this.messageListeners[Tools.toId(Tools.prepareMessage(message))] = listener;
+		this.messageListeners[toID(Tools.prepareMessage(message))] = listener;
 	}
 
 	onHtml(html: string, listener: () => void): void {
 		if (!this.htmlMessageListeners) this.htmlMessageListeners = {};
-		this.htmlMessageListeners[Tools.toId(Client.getListenerHtml(html))] = listener;
+		this.htmlMessageListeners[toID(Client.getListenerHtml(html))] = listener;
 	}
 
 	onUhtml(name: string, html: string, listener: () => void): void {
 		const id = Tools.toId(name);
 		if (!this.uhtmlMessageListeners) this.uhtmlMessageListeners = {};
 		if (!(id in this.uhtmlMessageListeners)) this.uhtmlMessageListeners[id] = {};
-		this.uhtmlMessageListeners[id][Tools.toId(Client.getListenerUhtml(html))] = listener;
+		this.uhtmlMessageListeners[id][toID(Client.getListenerUhtml(html))] = listener;
 	}
 
 	off(message: string): void {
 		if (!this.messageListeners) return;
-		delete this.messageListeners[Tools.toId(Tools.prepareMessage(message))];
+		delete this.messageListeners[toID(Tools.prepareMessage(message))];
 	}
 
 	offHtml(html: string): void {
 		if (!this.htmlMessageListeners) return;
-		delete this.htmlMessageListeners[Tools.toId(Client.getListenerHtml(html))];
+		delete this.htmlMessageListeners[toID(Client.getListenerHtml(html))];
 	}
 
 	offUhtml(name: string, html: string): void {
 		if (!this.uhtmlMessageListeners) return;
-		const id = Tools.toId(name);
+		const id = toID(name);
 		if (!(id in this.uhtmlMessageListeners)) return;
-		delete this.uhtmlMessageListeners[id][Tools.toId(Client.getListenerUhtml(html))];
+		delete this.uhtmlMessageListeners[id][toID(Client.getListenerUhtml(html))];
 	}
 }
 
@@ -114,7 +112,7 @@ export class Users {
 
 	constructor() {
 		const username = Config.username || "Self";
-		this.self = this.add(username, Tools.toId(username));
+		this.self = this.add(username, toID(username));
 	}
 
 	/** Should only be used when interacting with a potentially new user (in Client) */
@@ -124,7 +122,7 @@ export class Users {
 	}
 
 	get(name: string): User | undefined {
-		return this.users[Tools.toId(name)];
+		return this.users[toID(name)];
 	}
 
 	remove(user: User): void {
@@ -138,7 +136,7 @@ export class Users {
 	}
 
 	rename(name: string, oldId: string): User {
-		const id = Tools.toId(name);
+		const id = toID(name);
 		if (!(oldId in this.users)) return this.add(name, id);
 		const user = this.users[oldId];
 		this.remove(user);
