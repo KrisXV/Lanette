@@ -1,6 +1,6 @@
 import { GroupName } from "../client";
 import { IServerGroup } from "./client-message-types";
-import { IFormat } from "./in-game-data-types";
+import { Format } from "./in-game-data-types";
 
 interface IEventInformation {
 	name: string;
@@ -58,7 +58,7 @@ export interface IDatabase {
 	ruleset?: {
 		[k: string]: {
 			name: string;
-			baseFormat: IFormat;
+			baseFormat: Format;
 			remrules: string[];
 			addrules: string[];
 			bans: string[];

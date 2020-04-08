@@ -1,10 +1,8 @@
 import { RuleTable } from './dex';
-import { IFormat, IMove, IPokemon } from './types/in-game-data-types';
+import { Format, Move, Species } from './types/in-game-data-types';
 
-type Move = IMove;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObject = Dict<any>;
-type Template = IPokemon;
 type ID = string;
 
 /**
@@ -197,17 +195,17 @@ export class PokemonSources {
 }
 
 export class TeamValidator {
-	static get(format: string | IFormat): TeamValidator {
+	static get(format: string | Format): TeamValidator {
 		return new TeamValidator(format);
 	}
 
-	readonly format: IFormat;
+	readonly format: Format;
 	readonly dex: typeof Dex;
 	readonly gen: number;
 	readonly minSourceGen: number;
 	readonly ruleTable: RuleTable;
 
-	constructor(formatid: string | IFormat) {
+	constructor(formatid: string | Format) {
 		this.format = typeof formatid === 'string' ? Dex.getExistingFormat(formatid) : formatid;
 		this.dex = Dex.forFormat(this.format);
 		this.gen = this.dex.gen;
@@ -217,23 +215,23 @@ export class TeamValidator {
 			this.ruleTable.minSourceGen[0] : 1;
 	}
 
-	allSources(template?: Template): PokemonSources {
+	allSources(species?: Species): PokemonSources {
 		let minSourceGen = this.minSourceGen;
 		if (this.dex.gen >= 3 && minSourceGen < 3) minSourceGen = 3;
-		if (template) minSourceGen = Math.max(minSourceGen, template.gen);
+		if (species) minSourceGen = Math.max(minSourceGen, species.gen);
 		const maxSourceGen = this.ruleTable.has('allowtradeback') ? 2 : this.dex.gen;
 		return new PokemonSources(maxSourceGen, minSourceGen);
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	checkLearnset(move: Move, species: Template, setSources = this.allSources(species), set: AnyObject = {}): {type: string; [key: string]: any} | null {
+	checkLearnset(move: Move, s: Species, setSources = this.allSources(s), set: AnyObject = {}): {type: string; [key: string]: any} | null {
 		const dex = this.dex;
 		if (!setSources.size()) throw new Error(`Bad sources passed to checkLearnset`);
 
 		const moveid = toID(move);
 		move = dex.getMove(moveid)!;
-		const baseTemplate = dex.getTemplate(species)!;
-		let template: Template | null = baseTemplate;
+		const baseSpecies = dex.getSpecies(s)!;
+		let species: Species | null = baseSpecies;
 
 		const format = this.format;
 		const ruleTable = dex.getRuleTable(format);
@@ -267,13 +265,13 @@ export class TeamValidator {
 		const noFutureGen = !ruleTable.has('allowtradeback');
 
 		let tradebackEligible = false;
-		while (template && template.species && !alreadyChecked[template.speciesid]) {
-			alreadyChecked[template.speciesid] = true;
-			if (dex.gen <= 2 && template.gen === 1) tradebackEligible = true;
-			if (!template.learnset) {
-				if (template.baseSpecies !== template.species) {
+		while (species && species.name && !alreadyChecked[species.id]) {
+			alreadyChecked[species.id] = true;
+			if (dex.gen <= 2 && species.gen === 1) tradebackEligible = true;
+			if (!species.learnset) {
+				if (species.baseSpecies !== species.name) {
 					// forme without its own learnset
-					template = dex.getTemplate(template.baseSpecies);
+					species = dex.getSpecies(species.baseSpecies);
 					// warning: formes with their own learnset, like Wormadam, should NOT
 					// inherit from their base forme unless they're freely switchable
 					continue;
@@ -281,19 +279,19 @@ export class TeamValidator {
 				// should never happen
 				break;
 			}
-			const checkingPrevo = template.baseSpecies !== species.baseSpecies;
+			const checkingPrevo = species.baseSpecies !== species.baseSpecies;
 			if (checkingPrevo && !moveSources.size()) {
-				if (!setSources.babyOnly || !template.prevo) {
-					babyOnly = template.speciesid;
+				if (!setSources.babyOnly || !species.prevo) {
+					babyOnly = species.id;
 				}
 			}
 
-			if (template.learnset[moveid] || template.learnset['sketch']) {
+			if (species.learnset[moveid] || species.learnset['sketch']) {
 				sometimesPossible = true;
-				let lset = template.learnset[moveid];
-				if (moveid === 'sketch' || !lset || template.speciesid === 'smeargle') {
+				let lset = species.learnset[moveid];
+				if (moveid === 'sketch' || !lset || species.id === 'smeargle') {
 					if (move.noSketch || move.isZ) return {type: 'invalid'};
-					lset = template.learnset['sketch'];
+					lset = species.learnset['sketch'];
 					sketch = true;
 				}
 				if (typeof lset === 'string') lset = [lset];
@@ -324,13 +322,13 @@ export class TeamValidator {
 
 					if (
 						learnedGen < 7 && setSources.isHidden &&
-						!dex.mod('gen' + learnedGen).getTemplate(baseTemplate.species)!.abilities['H']
+						!dex.mod('gen' + learnedGen).getSpecies(baseSpecies.name)!.abilities['H']
 					) {
 						// check if the Pokemon's hidden ability was available
 						incompatibleAbility = true;
 						continue;
 					}
-					if (!template.isNonstandard) {
+					if (!species.isNonstandard) {
 						// HMs can't be transferred
 						if (dex.gen >= 4 && learnedGen <= 3 &&
 							['cut', 'fly', 'surf', 'strength', 'flash', 'rocksmash', 'waterfall', 'dive'].includes(moveid)) continue;
@@ -346,9 +344,9 @@ export class TeamValidator {
 							// we're past the required level to learn it
 							// (gen 7 level-up moves can be relearnered at any level)
 							// falls through to LMT check below
-						} else if (level >= 5 && learnedGen === 3 && template.eggGroups && template.eggGroups[0] !== 'Undiscovered') {
+						} else if (level >= 5 && learnedGen === 3 && species.eggGroups && species.eggGroups[0] !== 'Undiscovered') {
 							// Pomeg Glitch
-						} else if ((!template.gender || template.gender === 'F') && learnedGen >= 2) {
+						} else if ((!species.gender || species.gender === 'F') && learnedGen >= 2) {
 							// available as egg move
 							learned = learnedGen + 'Eany';
 							// falls through to E check below
@@ -382,7 +380,7 @@ export class TeamValidator {
 						} else if (learnedGen < 6) {
 							limitedEggMove = move.id;
 						}
-						learned = learnedGen + 'E' + (template.prevo ? template.id : '');
+						learned = learnedGen + 'E' + (species.prevo ? species.id : '');
 						if (tradebackEligible && learnedGen === 2 && move.gen <= 1) {
 							// can tradeback
 							moveSources.add('1ET' + learned.slice(2));
@@ -395,13 +393,13 @@ export class TeamValidator {
 						// 	Available as long as the past gen can get the Pokémon and then trade it back.
 						if (tradebackEligible && learnedGen === 2 && move.gen <= 1) {
 							// can tradeback
-							moveSources.add('1ST' + learned.slice(2) + ' ' + template.id);
+							moveSources.add('1ST' + learned.slice(2) + ' ' + species.id);
 						}
-						moveSources.add(learned + ' ' + template.id);
+						moveSources.add(learned + ' ' + species.id);
 					} else if (learned.charAt(1) === 'D') {
 						// DW moves:
 						//   only if that was the source
-						moveSources.add(learned + template.id);
+						moveSources.add(learned + species.id);
 					} else if (learned.charAt(1) === 'V' && this.minSourceGen < learnedGen) {
 						// Virtual Console or Let's Go transfer moves:
 						//   only if that was the source
@@ -409,13 +407,13 @@ export class TeamValidator {
 					}
 				}
 			}
-			if (ruleTable.has('mimicglitch') && template.gen < 5) {
+			if (ruleTable.has('mimicglitch') && species.gen < 5) {
 				// include the Mimic Glitch when checking this mon's learnset
 				const glitchMoves = ['metronome', 'copycat', 'transform', 'mimic', 'assist'];
 				let getGlitch = false;
 				for (const i of glitchMoves) {
-					if (template.learnset[i]) {
-						if (!(i === 'mimic' && dex.getAbility(set.ability)!.gen === 4 && !template.prevo)) {
+					if (species.learnset[i]) {
+						if (!(i === 'mimic' && dex.getAbility(set.ability)!.gen === 4 && !species.prevo)) {
 							getGlitch = true;
 							break;
 						}
@@ -431,15 +429,15 @@ export class TeamValidator {
 
 			if (!moveSources.size()) {
 				if (
-					(template.evoType === 'levelMove' && template.evoMove !== move.name) ||
-					(template.id === 'sylveon' && move.type !== 'Fairy')
+					(species.evoType === 'levelMove' && species.evoMove !== move.name) ||
+					(species.id === 'sylveon' && move.type !== 'Fairy')
 				) {
 					moveSources.moveEvoCarryCount = 1;
 				}
 			}
 
 			// also check to see if the mon's prevo or freely switchable formes can learn this move
-			template = this.learnsetParent(template);
+			species = this.learnsetParent(species);
 		}
 
 		if (limit1 && sketch) {
@@ -476,21 +474,21 @@ export class TeamValidator {
 		return null;
 	}
 
-	learnsetParent(template: Template): IPokemon | null {
-		if (template.species === 'Lycanroc-Dusk') {
-			return this.dex.getTemplate('Rockruff-Dusk');
-		} else if (template.prevo) {
+	learnsetParent(species: Species): Species | null {
+		if (species.name === 'Lycanroc-Dusk') {
+			return this.dex.getSpecies('Rockruff-Dusk');
+		} else if (species.prevo) {
 			// there used to be a check for Hidden Ability here, but apparently it's unnecessary
 			// Shed Skin Pupitar can definitely evolve into Unnerve Tyranitar
-			template = this.dex.getTemplate(template.prevo)!;
-			if (template.gen > Math.max(2, this.dex.gen)) return null;
-			return template;
-		} else if (template.inheritsFrom) {
+			species = this.dex.getSpecies(species.prevo)!;
+			if (species.gen > Math.max(2, this.dex.gen)) return null;
+			return species;
+		} else if (species.inheritsFrom) {
 			// For Pokemon like Rotom, Necrozma, and Gmax formes whose movesets are extensions are their base formes
-			if (Array.isArray(template.inheritsFrom)) {
-				throw new Error(`Ambiguous template ${template.species} passed to learnsetParent`);
+			if (Array.isArray(species.inheritsFrom)) {
+				throw new Error(`Ambiguous template ${species.name} passed to learnsetParent`);
 			}
-			return this.dex.getTemplate(template.inheritsFrom as string);
+			return this.dex.getSpecies(species.inheritsFrom as string);
 		}
 		return null;
 	}

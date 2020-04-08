@@ -10,7 +10,7 @@ type StatNameExceptHP = 'atk' | 'def' | 'spa' | 'spd' | 'spe';
 type Nonstandard = 'Past' | 'Future' | 'Unobtainable' | 'CAP' | 'LGPE' | 'Custom';
 export type StatName = 'hp' | StatNameExceptHP;
 
-interface IStatsTable {
+interface StatsTable {
 	hp: number;
 	atk: number;
 	def: number;
@@ -20,9 +20,9 @@ interface IStatsTable {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-interface ISparseStatsTable extends Partial<IStatsTable> {}
+interface SparseStatsTable extends Partial<StatsTable> {}
 
-interface IBoostsTable {
+interface BoostsTable {
 	atk: number;
 	def: number;
 	spa: number;
@@ -33,15 +33,15 @@ interface IBoostsTable {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-interface ISparseBoostsTable extends Partial<IBoostsTable> {}
+interface SparseBoostsTable extends Partial<BoostsTable> {}
 
-interface IEventInfo {
+interface EventInfo {
 	generation: number;
 	level?: number;
 	shiny?: boolean | 1;
 	gender?: GenderName;
 	nature?: string;
-	ivs?: ISparseStatsTable;
+	ivs?: SparseStatsTable;
 	perfectIVs?: number;
 	isHidden?: boolean;
 	abilities?: string[];
@@ -51,7 +51,7 @@ interface IEventInfo {
 	from?: string;
 }
 
-interface IPokemonSet {
+interface PokemonSet {
 	name: string;
 	species: string;
 	item: string;
@@ -59,8 +59,8 @@ interface IPokemonSet {
 	moves: string[];
 	nature: string;
 	gender: string;
-	evs: IStatsTable;
-	ivs: IStatsTable;
+	evs: StatsTable;
+	ivs: StatsTable;
 	level: number;
 	shiny?: boolean;
 	happiness?: number;
@@ -69,20 +69,20 @@ interface IPokemonSet {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-interface IEventMethods {
+interface EventMethods {
 	/** Return true to stop the move from being used */
 	beforeMoveCallback?: (this: any, pokemon: any, target: any | null, move: any) => boolean | void;
 	beforeTurnCallback?: (this: any, pokemon: any, target: any) => void;
 	damageCallback?: (this: any, pokemon: any, target: any) => number | false;
 	durationCallback?: (this: any, target: any, source: any, effect: any | null) => number;
 	onAfterDamage?: (this: any, damage: number, target: any, soruce: any, move: any) => void;
-	onAfterEachBoost?: (this: any, boost: ISparseBoostsTable, target: any, source: any) => void;
+	onAfterEachBoost?: (this: any, boost: SparseBoostsTable, target: any, source: any) => void;
 	onAfterHit?: (this: any, source: any, target: any, move: any) => void;
 	onAfterSetStatus?: (this: any, status: any, target: any, source: any, effect: any) => void;
 	onAfterSubDamage?: (this: any, damage: any, target: any, source: any, move: any) => void;
 	onAfterSwitchInSelf?: (this: any, pokemon: any) => void;
 	onAfterUseItem?: (this: any, item: any, pokemon: any) => void;
-	onAfterBoost?: (this: any, boost: ISparseBoostsTable, target: any, source: any, effect: any) => void;
+	onAfterBoost?: (this: any, boost: SparseBoostsTable, target: any, source: any, effect: any) => void;
 	onAfterMoveSecondarySelf?: (this: any, source: any, target: any, move: any) => void;
 	onAfterMoveSecondary?: (this: any, target: any, source: any, move: any) => void;
 	onAfterMove?: (this: any, pokemon: any, target: any, move: any) => void;
@@ -91,7 +91,7 @@ interface IEventMethods {
 	onAllyBasePower?: (this: any, basePower: number, attacker: any, defender: any, move: any) => void;
 	onAllyModifyAtk?: (this: any, atk: number) => void;
 	onAllyModifySpD?: (this: any, spd: number) => void;
-	onAllyBoost?: (this: any, boost: ISparseBoostsTable, target: any, source: any, effect: any) => void;
+	onAllyBoost?: (this: any, boost: SparseBoostsTable, target: any, source: any, effect: any) => void;
 	onAllySetStatus?: (this: any, status: any, target: any, source: any, effect: any) => void;
 	onAllyTryHitSide?: (this: any, target: any, source: any, move: any) => void;
 	onAllyFaint?: (this: any, target: any) => void;
@@ -107,7 +107,7 @@ interface IEventMethods {
 	onAnyAccuracy?: (this: any, accuracy: number, target: any, source: any, move: any) => void;
 	onAnyTryImmunity?: (this: any, target: any, source: any, move: any) => void;
 	onAnyFaint?: (this: any) => void;
-	onAnyModifyBoost?: (this: any, boosts: ISparseBoostsTable, target: any) => void;
+	onAnyModifyBoost?: (this: any, boosts: SparseBoostsTable, target: any) => void;
 	onAnyDragOut?: (this: any, pokemon: any) => void;
 	onAnySetStatus?: (this: any, status: any, pokemon: any) => void;
 	onAttract?: (this: any, target: any, source: any, effect: any) => void;
@@ -119,7 +119,7 @@ interface IEventMethods {
 	onBeforeSwitchIn?: (this: any, pokemon: any) => void;
 	onBeforeSwitchOut?: (this: any, pokemon: any) => void;
 	onBeforeTurn?: (this: any, pokemon: any) => void;
-	onBoost?: (this: any, boost: ISparseBoostsTable, target: any, source: any, effect: any) => void;
+	onBoost?: (this: any, boost: SparseBoostsTable, target: any, source: any, effect: any) => void;
 	onChargeMove?: (this: any, pokemon: any, target: any, move: any) => void;
 	onCheckShow?: (this: any, pokemon: any) => void;
 	onCopy?: (this: any, pokemon: any) => void;
@@ -151,7 +151,7 @@ interface IEventMethods {
 	onLockMoveTarget?: (this: any) => number;
 	onModifyAccuracy?: (this: any, accuracy: number, target: any, source: any, move: any) => number | void;
 	onModifyAtk?: (this: any, atk: number, attacker: any, defender: any, move: any) => number | void;
-	onModifyBoost?: (this: any, boosts: ISparseBoostsTable) => void;
+	onModifyBoost?: (this: any, boosts: SparseBoostsTable) => void;
 	onModifyCritRatio?: (this: any, critRatio: number, source: any, target: any) => number | void;
 	onModifyDamage?: (this: any, damage: number, source: any, target: any, move: any) => number | void;
 	onModifyDef?: (this: any, def: number, pokemon: any) => number | void;
@@ -207,18 +207,18 @@ interface IEventMethods {
 	onWeather?: (this: any, target: any, source: any, effect: any) => void;
 	onWeatherModifyDamage?: (this: any, damage: number, attacker: any, defender: any, move: any) => number | void;
 	onAnyModifyDamagePhase1?: (this: any, damage: number, source: any, target: any, move: any) => number | void;
-	onAnyModifyDamagePhase2?: IEventMethods["onAnyModifyDamagePhase1"];
-	onModifyDamagePhase1?: IEventMethods["onAnyModifyDamagePhase1"];
-	onModifyDamagePhase2?: IEventMethods["onAnyModifyDamagePhase1"];
+	onAnyModifyDamagePhase2?: EventMethods["onAnyModifyDamagePhase1"];
+	onModifyDamagePhase1?: EventMethods["onAnyModifyDamagePhase1"];
+	onModifyDamagePhase2?: EventMethods["onAnyModifyDamagePhase1"];
 }
 /* eslint-enable */
 
-interface ISecondaryEffect {
+interface SecondaryEffect {
 	status?: string;
 	volatileStatus?: string;
 }
 
-interface IEffectData extends IEventMethods {
+interface EffectData extends EventMethods {
 	id: string;
 	name: string;
 	num: number;
@@ -227,7 +227,7 @@ interface IEffectData extends IEventMethods {
 	desc?: string;
 	drain?: number[];
 	duration?: number;
-	effect?: Partial<IEffectData>;
+	effect?: Partial<EffectData>;
 	effectType?: string;
 	infiltrates?: boolean;
 	isNonstandard?: Nonstandard;
@@ -281,33 +281,33 @@ interface IEffectData extends IEventMethods {
 	onTryPrimaryHitPriority?: number;
 	onTypePriority?: number;
 	recoil?: [number, number];
-	secondary?: ISecondaryEffect | null;
+	secondary?: SecondaryEffect | null;
 	shortDesc?: string;
 	status?: string;
 	weather?: string;
 }
 
-export interface IAbilityData extends IEffectData {
+export interface AbilityData extends EffectData {
 	effectType: 'Ability';
 	rating: number;
 	isUnbreakable?: boolean;
 	suppressWeather?: boolean;
 }
 
-export interface IAbilityComputed {
+export interface AbilityComputed {
 	effectType: "Ability";
 	gen: number;
 	id: string;
 	isNonstandard?: Nonstandard;
 }
 
-export interface IAbilityCopy extends IAbilityData, IAbilityComputed {}
+export interface AbilityCopy extends AbilityData, AbilityComputed {}
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface IAbility extends DeepReadonly<IAbilityCopy> {}
+export interface Ability extends DeepReadonly<AbilityCopy> {}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export interface IFormatData extends IEventMethods {
+export interface FormatData extends EventMethods {
 	challengeShow: boolean;
 	column: number;
 	effectType: "Format" | "Ruleset" | "Rule" | "ValidatorRule";
@@ -356,7 +356,7 @@ export interface IFormatData extends IEventMethods {
 }
 /* eslint-enable */
 
-export interface IFormatLinks {
+export interface FormatLinks {
 	aliases?: string[];
 	desc?: string;
 	generator?: string;
@@ -371,15 +371,15 @@ export interface IFormatLinks {
 	'viability-official'?: string;
 }
 
-export interface ISeparatedCustomRules {
+export interface SeparatedCustomRules {
 	bans: string[];
 	unbans: string[];
 	addedrules: string[];
 	removedrules: string[];
 }
 
-export interface IFormatComputed {
-	banlist: NonNullable<IFormatData["banlist"]>;
+export interface FormatComputed {
+	banlist: NonNullable<FormatData["banlist"]>;
 	customRules: string[] | null;
 	defaultLevel: number;
 	effectType: "Format" | "Ruleset" | "Rule" | "ValidatorRule";
@@ -387,32 +387,32 @@ export interface IFormatComputed {
 	inputTarget: string;
 	maxLevel: number;
 	quickFormat: boolean;
-	ruleset: NonNullable<IFormatData["ruleset"]>;
+	ruleset: NonNullable<FormatData["ruleset"]>;
 	ruleTable: RuleTable | null;
-	separatedCustomRules: ISeparatedCustomRules | null;
+	separatedCustomRules: SeparatedCustomRules | null;
 	tournamentPlayable: boolean;
-	unbanlist: NonNullable<IFormatData["unbanlist"]>;
+	unbanlist: NonNullable<FormatData["unbanlist"]>;
 	unranked: boolean;
 }
 
-export interface IFormat extends IFormatData, IFormatLinks, IFormatComputed {
-	banlist: NonNullable<IFormatData["banlist"]>;
+export interface Format extends FormatData, FormatLinks, FormatComputed {
+	banlist: NonNullable<FormatData["banlist"]>;
 	defaultLevel: number;
 	maxLevel: number;
-	ruleset: NonNullable<IFormatData["ruleset"]>;
-	unbanlist: NonNullable<IFormatData["unbanlist"]>;
+	ruleset: NonNullable<FormatData["ruleset"]>;
+	unbanlist: NonNullable<FormatData["unbanlist"]>;
 }
 
-export interface IFlingData {
+export interface FlingData {
 	basePower: number;
 	status?: string;
 	volatileStatus?: string;
 }
 
-export interface IItemData extends IEffectData {
+export interface ItemData extends EffectData {
 	effectType: 'Item';
 	gen: number;
-	fling?: IFlingData;
+	fling?: FlingData;
 	forcedForme?: string;
 	ignoreKlutz?: boolean;
 	isBerry?: boolean;
@@ -431,20 +431,20 @@ export interface IItemData extends IEffectData {
 	zMoveType?: string;
 }
 
-export interface IItemComputed {
+export interface ItemComputed {
 	effectType: "Item";
-	fling?: IFlingData;
+	fling?: FlingData;
 	gen: number;
 	id: string;
 	isNonstandard?: Nonstandard;
 }
 
-export interface IItemCopy extends IItemData, IItemComputed {}
+export interface ItemCopy extends ItemData, ItemComputed {}
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface IItem extends DeepReadonly<IItemCopy> {}
+export interface Item extends DeepReadonly<ItemCopy> {}
 
-export interface IMoveFlags {
+export interface MoveFlags {
 	/** Ignores a target's substitute. */
 	authentic?: 1;
 	/** Power is multiplied by 1.5 when used by a Pokemon with the Ability Strong Jaw. */
@@ -489,12 +489,12 @@ export interface IMoveFlags {
 	sound?: 1;
 }
 
-export interface IMoveData extends IEffectData {
+export interface MoveData extends EffectData {
 	effectType: 'Move';
 	accuracy: true | number;
 	basePower: number;
 	category: 'Physical' | 'Special' | 'Status';
-	flags: IMoveFlags;
+	flags: MoveFlags;
 	pp: number;
 	priority: number;
 	target: string;
@@ -502,7 +502,7 @@ export interface IMoveData extends IEffectData {
 	alwaysHit?: boolean;
 	baseMoveType?: string;
 	basePowerModifier?: number;
-	boosts?: ISparseBoostsTable | false;
+	boosts?: SparseBoostsTable | false;
 	breaksProtect?: boolean;
 	contestType?: string;
 	critModifier?: number;
@@ -538,7 +538,7 @@ export interface IMoveData extends IEffectData {
 	ohko?: boolean | string;
 	pressureTarget?: string;
 	pseudoWeather?: string;
-	selfBoost?: {boosts?: ISparseBoostsTable};
+	selfBoost?: {boosts?: SparseBoostsTable};
 	selfdestruct?: string | boolean;
 	selfSwitch?: string | boolean;
 	sideCondition?: string;
@@ -557,40 +557,40 @@ export interface IMoveData extends IEffectData {
 	forceSTAB?: boolean;
 	zMovePower?: number;
 	zMoveEffect?: string;
-	zMoveBoost?: ISparseBoostsTable;
+	zMoveBoost?: SparseBoostsTable;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	basePowerCallback?: (pokemon: any, target: any, move: any) => number | false | null;
 }
 
-export interface IMoveComputed {
+export interface MoveComputed {
 	baseMoveType: string;
 	effectType: "Move";
 	gen: number;
 	gmaxPower?: number;
-	ignoreImmunity: IMoveData["ignoreImmunity"];
+	ignoreImmunity: MoveData["ignoreImmunity"];
 	isNonstandard?: Nonstandard;
 	zMovePower?: number;
 }
 
-export interface IMoveCopy extends IMoveData, IMoveComputed {
+export interface MoveCopy extends MoveData, MoveComputed {
 	baseMoveType: string;
-	ignoreImmunity: IMoveData["ignoreImmunity"];
+	ignoreImmunity: MoveData["ignoreImmunity"];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface IMove extends DeepReadonly<IMoveCopy> {}
+export interface Move extends DeepReadonly<MoveCopy> {}
 
-type TemplateAbility = {0: string; 1?: string; H?: string; S?: string};
+type SpeciesAbility = {0: string; 1?: string; H?: string; S?: string};
 
-export interface ITemplateData {
+export interface SpeciesData {
 	effectType: 'Pokemon';
-	abilities: TemplateAbility;
-	baseStats: IStatsTable;
+	abilities: SpeciesAbility;
+	baseStats: StatsTable;
 	color: string;
 	eggGroups: string[];
 	heightm: number;
 	num: number;
-	species: string;
+	name: string;
 	types: string[];
 	weightkg: number;
 	baseForme?: string;
@@ -616,13 +616,13 @@ export interface ITemplateData {
 	isGigantamax?: string;
 }
 
-export interface ILearnset {
+export interface Learnset {
 	learnset?: Dict<string[]>;
 	eventOnly?: boolean;
-	eventData?: IEventInfo[];
+	eventData?: EventInfo[];
 }
 
-export interface ITemplateFormatsData {
+export interface SpeciesFormatsData {
 	comboMoves?: string[];
 	doublesTier?: string;
 	essentialMove?: string;
@@ -631,10 +631,16 @@ export interface ITemplateFormatsData {
 	isUnreleased?: boolean;
 	maleOnlyHidden?: boolean;
 	randomSets?: {
-		chance: number,
-		item?: string[],
-		baseMove1?: string, baseMove2?: string, baseMove3?: string, baseMove4?: string,
-		fillerMoves1?: string[], fillerMoves2?: string[], fillerMoves3?: string[], fillerMoves4?: string[],
+		chance: number;
+		item?: string[];
+		baseMove1?: string;
+		baseMove2?: string;
+		baseMove3?: string;
+		baseMove4?: string;
+		fillerMoves1?: string[];
+		fillerMoves2?: string[];
+		fillerMoves3?: string[];
+		fillerMoves4?: string[];
 	}[];
 	randomBattleMoves?: string[];
 	randomDoubleBattleMoves?: string[];
@@ -642,7 +648,7 @@ export interface ITemplateFormatsData {
 	unreleasedHidden?: boolean;
 }
 
-export interface IPokemonComputed {
+export interface SpeciesComputed {
 	allPossibleMoves: string[];
 	baseSpecies: string;
 	battleOnly?: string | string[];
@@ -651,7 +657,7 @@ export interface IPokemonComputed {
 	evos: string[];
 	forme: string;
 	gen: number;
-	genderRatio: NonNullable<ITemplateData["genderRatio"]>;
+	genderRatio: NonNullable<SpeciesData["genderRatio"]>;
 	id: string;
 	isForme: boolean;
 	isGigantamax?: string;
@@ -662,60 +668,59 @@ export interface IPokemonComputed {
 	nfe: boolean;
 	requiredItems?: string[];
 	shiny: boolean;
-	speciesid: string;
 	spriteId: string;
 	tier: string;
 }
 
-export interface IPokemonCopy extends ITemplateData, Partial<ILearnset>, ITemplateFormatsData, IPokemonComputed {
+export interface SpeciesCopy extends SpeciesData, Partial<Learnset>, SpeciesFormatsData, SpeciesComputed {
 	baseSpecies: string;
 	evos: string[];
 	forme: string;
 	gen: number;
-	genderRatio: NonNullable<ITemplateData["genderRatio"]>;
+	genderRatio: NonNullable<SpeciesData["genderRatio"]>;
 	requiredItems?: string[];
 	tier: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface IPokemon extends DeepReadonly<IPokemonCopy> {}
+export interface Species extends DeepReadonly<SpeciesCopy> {}
 
-export interface ITypeChart {
+export interface TypeChart {
 	damageTaken: Dict<number>;
 	HPivs?: Dict<number>;
 	HPdvs?: Dict<number>;
 }
 
-export interface INature {
+export interface Nature {
 	name: string;
 	plus?: string;
 	minus?: string;
 }
 
-export interface IGifData {
+export interface GifData {
 	back?: {h: number; w: number};
 	front?: {h: number; w: number};
 }
 
-export interface IDataTable {
-	readonly abilities: Dict<IAbilityData | undefined>;
-	readonly aliases: Dict<string | undefined>;
-	readonly badges: string[];
-	readonly categories: Dict<string | undefined>;
-	readonly characters: string[];
-	readonly colors: Dict<string>;
-	readonly eggGroups: Dict<string>;
-	readonly formats: Dict<(IFormatData & IFormatLinks) | undefined>;
-	readonly formatsData: Dict<ITemplateFormatsData | undefined>;
-	readonly gifData: Dict<IGifData | undefined>;
-	readonly gifDataBW: Dict<IGifData | undefined>;
-	readonly items: Dict<IItemData | undefined>;
-	readonly learnsets: Dict<ILearnset | undefined>;
-	readonly locations: string[];
-	readonly moves: Dict<IMoveData | undefined>;
-	readonly natures: Dict<INature | undefined>;
-	readonly pokedex: Dict<ITemplateData | undefined>;
-	readonly trainerClasses: string[];
-	readonly typeChart: Dict<ITypeChart | undefined>;
-	readonly types: Dict<string>;
+export interface DataTable {
+	readonly Abilities: Dict<AbilityData | undefined>;
+	readonly Aliases: Dict<string | undefined>;
+	readonly Badges: string[];
+	readonly Categories: Dict<string | undefined>;
+	readonly Characters: string[];
+	readonly Colors: Dict<string>;
+	readonly EggGroups: Dict<string>;
+	readonly Formats: Dict<(FormatData & FormatLinks) | undefined>;
+	readonly FormatsData: Dict<SpeciesFormatsData | undefined>;
+	readonly GifData: Dict<GifData | undefined>;
+	readonly GifDataBW: Dict<GifData | undefined>;
+	readonly Items: Dict<ItemData | undefined>;
+	readonly Learnsets: Dict<Learnset | undefined>;
+	readonly Locations: string[];
+	readonly Movedex: Dict<MoveData | undefined>;
+	readonly Natures: Dict<Nature | undefined>;
+	readonly Pokedex: Dict<SpeciesData | undefined>;
+	readonly TrainerClasses: string[];
+	readonly TypeChart: Dict<TypeChart | undefined>;
+	readonly Types: Dict<string>;
 }

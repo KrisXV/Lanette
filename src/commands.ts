@@ -1,38 +1,21 @@
 // eslint-disable-next-line @typescript-eslint/camelcase
 import child_process = require('child_process');
-import fs = require('fs');
 import https = require('https');
 import path = require('path');
 
 import { ICommandDefinition } from "./command-parser";
 import { commandCharacter } from './config';
 import { Room } from "./rooms";
-import { IFormat } from "./types/in-game-data-types";
 
 type ReloadableModule = 'client' | 'commandparser' | 'commands' | 'config' | 'dex' | 'games' | 'storage' | 'tools' | 'tournaments';
-const moduleOrder: ReloadableModule[] = ['tools', 'config', 'dex', 'client', 'commandparser', 'commands', 'games', 'storage', 'tournaments'];
+const moduleOrder: ReloadableModule[] = ['tools', 'config', 'dex', 'client', 'commandparser', 'commands', 'storage', 'tournaments'];
 
 const AWARDED_BOT_GREETING_DURATION = 60 * 24 * 60 * 60 * 1000;
 
 let reloadInProgress = false;
 
-const ALL_TIERS = ['AG', 'Uber', 'OU', 'UUBL', 'UU', 'RUBL', 'RU', 'NUBL', 'NU', 'PUBL', 'PU', 'ZU', 'NFE', 'LC Uber', 'LC', 'CAP', 'CAP NFE', 'CAP LC', 'DUber', 'DOU', 'DBL', 'DUU', 'DNU', 'Mega', 'All Pokemon', 'All Abilities', 'All Items', 'All Moves', 'Nonexistent'].map(toID);
-
 /* eslint-disable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
 const commands: Dict<ICommandDefinition> = {
-	mcrb: {
-		command(target, room, user) {
-			if (this.isPm(room)) return;
-			if (!target) return;
-			this.say(`/tour new gen${target.trim()}randombattle, elim,,, Pan-Am Spotlight Sunday: [Gen ${target}] Camomons Random Battle`);
-			this.say(`/tour rules [Gen 8] Camomons, !Team Preview`);
-			this.say(`/tour autostart 3`);
-			this.say(`/tour forcetimer on`);
-			this.say(`!om [Gen 8] Camomons`);
-			return;
-		},
-		developerOnly: true,
-	},
 	shockedlapras: {
 		command(target, room, user) {
 			if (this.isPm(room) || !user.canPerform(room, 'roomowner')) return;
@@ -280,7 +263,7 @@ const commands: Dict<ICommandDefinition> = {
 			const hosts = Storage.getDatabase(room).hosts;
 			if (!hosts || !hosts.length) return this.say(`There are currently no hosts.`);
 			let buf = `<psicon pokemon="unown"><br /><details><summary><strong>${room.title}</strong> hosts</summary><ol>`;
-			for (const host of hosts) {
+			for (const host of hosts.sort()) {
 				buf += `<li><span class="username" data-name="${host}" style="white-space:nowrap;">${host.trim()}</span></li>`;
 			}
 			buf += `</ol></details>`;
@@ -402,12 +385,13 @@ const commands: Dict<ICommandDefinition> = {
 				const banlist = args.slice(1).join(' ').trim().split(',');
 				if (!banlist.length) return this.say(`Please provide Pokemon/items/moves/abilities/tiers to ban.`);
 				for (const ban of banlist.map(r => r.trim())) {
+					if (toID(ban) === 'metronome') {
+						return this.say(`Ambiguous ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`);
+					}
 					if (
-						!Dex.getTemplate(ban) &&
-						!Dex.getItem(ban) &&
-						!Dex.getMove(ban) &&
-						!Dex.getAbility(ban) &&
-						!ALL_TIERS.includes(toID(ban))
+						!Dex.getSpecies(ban) &&
+						!Dex.getEffect(ban) &&
+						!Dex.getTag(ban)
 					) {
 						return this.say(`Invalid ban '${ban}'`);
 					}
@@ -428,12 +412,13 @@ const commands: Dict<ICommandDefinition> = {
 				const unbanlist = args.slice(1).join(' ').trim().split(',');
 				if (!unbanlist.length) return this.say(`Please provide Pokemon/items/moves/abilities/tiers to unban.`);
 				for (const unban of unbanlist.map(r => r.trim())) {
+					if (toID(unban) === 'metronome') {
+						return this.say(`Ambiguous unban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`);
+					}
 					if (
-						!Dex.getTemplate(unban) &&
-						!Dex.getItem(unban) &&
-						!Dex.getMove(unban) &&
-						!Dex.getAbility(unban) &&
-						!ALL_TIERS.includes(toID(unban))
+						!Dex.getSpecies(unban) &&
+						!Dex.getEffect(unban) &&
+						!Dex.getTag(unban)
 					) {
 						return this.say(`Invalid unban '${unban}'`);
 					}
@@ -473,17 +458,15 @@ const commands: Dict<ICommandDefinition> = {
 							let split = slicedRule.split('+');
 							if (slindex >= 0) split = slicedRule.split('++');
 							for (const sp of split.map(x => x.trim())) {
+								if (toID(sp) === 'metronome') {
+									return this.say(`Ambiguous ${rule.charAt(0) === '-' ? '' : 'un'}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`);
+								}
 								if (
-									!Dex.getTemplate(sp) &&
-									!Dex.getItem(sp) &&
-									!Dex.getMove(sp) &&
-									!Dex.getAbility(sp) &&
-									!ALL_TIERS.includes(toID(sp))
+									!Dex.getSpecies(sp) &&
+									!Dex.getEffect(sp) &&
+									!Dex.getTag(sp)
 								) {
 									return this.say(`Invalid section of ${rule.charAt(0) === '-' ? 'ban' : 'unban'} '${rule}': ${sp}`);
-								}
-								if (toID(sp) === 'metronome') {
-									return this.say(`Please specify the Metronome you'd like to ban by preceding it with \`\`item:\`\` or \`\`move:\`\``);
 								}
 							}
 							if (db.tourRuleset.map(toID).includes(toID(rule))) {
@@ -497,17 +480,15 @@ const commands: Dict<ICommandDefinition> = {
 								Storage.exportDatabase(room.id);
 							}
 						} else {
+							if (toID(rule) === 'metronome') {
+								return this.say(`Ambiguous ${rule.charAt(0) === '-' ? '' : 'un'}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`);
+							}
 							if (
-								!Dex.getTemplate(rule) &&
-								!Dex.getItem(rule) &&
-								!Dex.getMove(rule) &&
-								!Dex.getAbility(rule) &&
-								!ALL_TIERS.includes(toID(rule))
+								!Dex.getSpecies(rule) &&
+								!Dex.getEffect(rule) &&
+								!Dex.getTag(rule)
 							) {
 								return this.say(`Invalid ${rule.charAt(0) === '-' ? 'ban' : 'unban'} '${rule}'`);
-							}
-							if (toID(rule) === 'metronome') {
-								return this.say(`Please specify the Metronome you'd like to ban by preceding it with \`\`item:\`\` or \`\`move:\`\``);
 							}
 							if (db.tourRuleset.map(toID).includes(toID(rule))) {
 								db.tourRuleset.splice(db.tourRuleset.map(toID).indexOf(toID(rule)), 1);
@@ -580,8 +561,7 @@ const commands: Dict<ICommandDefinition> = {
 				const format = Dex.getFormat(f) ? Dex.getFormat(f) : Dex.getCustomFormat(f, room) ? Dex.getCustomFormat(f, room) : null;
 				if (!format) return this.say(`Please provide a valid format.`);
 				const baseFormat = 'id' in format ? format : format.baseFormat;
-				let formatid: string;
-				formatid = baseFormat.id;
+				const formatid = baseFormat.id;
 				let tourcmd = `/tour new ${formatid}`;
 				if (targets[1] && ['elimination', 'elim', 'roundrobin'].includes(toID(targets[1]))) {
 					tourcmd += `, ${toID(targets[1])}`;
@@ -617,8 +597,6 @@ const commands: Dict<ICommandDefinition> = {
 				}
 				if (!baseFormat.team) {
 					this.say(`!rfaq ${formatid.slice(0, 4)}samples`);
-				} else {
-					this.say(`!rfaq oldgenmoves`);
 				}
 				if (!('id' in format)) {
 					db.tourRuleset = db.tourRuleset.concat(format.remrules).concat(format.addrules).concat(format.bans).concat(format.unbans);
@@ -692,7 +670,7 @@ const commands: Dict<ICommandDefinition> = {
 				this.say(`Custom rule table for ${name} created. (This does not mean the rules were added.)`);
 			}
 			const rset = db.ruleset[id];
-			for (let rule of rules.map(r => r.trim())) {
+			for (const rule of rules.map(r => r.trim())) {
 				if (rule.startsWith('!')) {
 					if (!Dex.getFormat(rule)) return this.say(`Invalid Rule '${rule}'`);
 					rset.remrules.push(rule);
@@ -703,24 +681,16 @@ const commands: Dict<ICommandDefinition> = {
 						const slindex = slicedRule.indexOf('++');
 						let split = slicedRule.split('+');
 						if (slindex >= 0) split = slicedRule.split('++');
-						for (let sp of split.map(x => x.trim())) {
-							const usingValidMetronomeBan = toID(sp).includes('metronome') && toID(sp.slice(4)) === 'metronome';
-							let usedSp = sp;
-							if (usingValidMetronomeBan) {
-								sp = toID(sp).startsWith('move') ? 'move:Metronome' : 'item:Metronome';
-								usedSp = 'metronome';
+						for (const sp of split.map(x => x.trim())) {
+							if (toID(sp) === 'metronome') {
+								return this.say(`Ambiguous ${rule.charAt(0) === '-' ? '' : 'un'}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`);
 							}
 							if (
-								!Dex.getTemplate(usedSp) &&
-								!Dex.getItem(usedSp) &&
-								!Dex.getMove(usedSp) &&
-								!Dex.getAbility(usedSp) &&
-								!ALL_TIERS.includes(toID(usedSp))
+								!Dex.getSpecies(sp) &&
+								!Dex.getEffect(sp) &&
+								!Dex.getTag(sp)
 							) {
 								return this.say(`Invalid section of ${rule.charAt(0) === '-' ? 'ban' : 'unban'} '${rule}': ${sp}`);
-							}
-							if (toID(usedSp) === 'metronome' && !usingValidMetronomeBan) {
-								return this.say(`Please specify the Metronome you'd like to ban by preceding it with \`\`item:\`\` or \`\`move:\`\``);
 							}
 						}
 						if (rule.charAt(0) === '+') {
@@ -731,22 +701,14 @@ const commands: Dict<ICommandDefinition> = {
 							Storage.exportDatabase(room.id);
 						}
 					} else {
-						const usingValidMetronomeBan = toID(rule).includes('metronome') && toID(rule.slice(4)) === 'metronome';
-						let usedRule = rule;
-						if (usingValidMetronomeBan) {
-							rule = toID(rule).startsWith('move') ? 'move:Metronome' : 'item:Metronome';
-							usedRule = 'metronome';
-						}
 						if (
-							!Dex.getTemplate(usedRule) &&
-							!Dex.getItem(usedRule) &&
-							!Dex.getMove(usedRule) &&
-							!Dex.getAbility(usedRule) &&
-							!ALL_TIERS.includes(toID(usedRule))
+							!Dex.getSpecies(rule) &&
+							!Dex.getEffect(rule) &&
+							!Dex.getTag(rule)
 						) {
 							return this.say(`Invalid ${rule.charAt(0) === '-' ? 'ban' : 'unban'} '${rule}'`);
 						}
-						if (toID(usedRule) === 'metronome' && !usingValidMetronomeBan) {
+						if (toID(rule) === 'metronome') {
 							return this.say(`Please specify the Metronome you'd like to ban by preceding it with \`\`item:\`\` or \`\`move:\`\``);
 						}
 						if (rule.charAt(0) === '+') {
@@ -779,6 +741,73 @@ const commands: Dict<ICommandDefinition> = {
 			return this.say(`Custom banlist for format '${name.trim()}' added.`);
 		},
 		aliases: ['addruleset', 'addbl'],
+	},
+	banlists: {
+		command(target, room, user) {
+			if (this.isPm(room)) return;
+			const rules = Dex.getCustomFormatList(room);
+			if (!rules) return this.say(`This room has no custom formats.`);
+			let buf = ``;
+			for (const ruleset of rules) {
+				buf += `<details><summary>${ruleset.name}</summary>`;
+				buf += `<ul style="list-style-type:none;margin-left:0;padding-left:0;">`;
+				buf += `<li><strong>Base Format:</strong> ${ruleset.baseFormat.name}</li>`;
+				if (ruleset.addrules.length > 0) {
+					buf += `<li><strong>Added rules:</strong> `;
+					const addrules = ruleset.addrules.sort();
+					const roos: string[] = [];
+					for (const j of addrules) {
+						const formatName = Dex.getFormat(j) ? Dex.getFormat(j)!.name : toID(j);
+						roos.push(formatName);
+					}
+					buf += `${roos.join(", ")}`;
+					buf += `</li>`;
+				}
+				if (ruleset.remrules.length > 0) {
+					buf += `<li><strong>Removed rules:</strong> `;
+					const remrules = ruleset.remrules.sort();
+					const roos: string[] = [];
+					for (const j of remrules) {
+						const formatName = Dex.getFormat(j) ? Dex.getFormat(j)!.name : toID(j);
+						roos.push(formatName);
+					}
+					buf += `${roos.join(", ")}`;
+					buf += `</li>`;
+				}
+				if (ruleset.bans.length > 0) {
+					buf += `<li><strong>Bans:</strong> `;
+					const bans = ruleset.bans.sort();
+					const roos: string[] = [];
+					for (const j of bans) {
+						const banName = Dex.getSpecies(j) ? Dex.getSpecies(j)!.name : Dex.getEffect(j) ?
+							Dex.getEffect(j)!.name : Dex.getTag(j) ? Dex.getTag(j)! : toID(j);
+						roos.push(banName);
+					}
+					buf += `${roos.sort().join(", ")}`;
+					buf += `</li>`;
+				}
+				if (ruleset.unbans.length > 0) {
+					buf += `<li><strong>Unbans:</strong> `;
+					const unbans = ruleset.unbans.sort();
+					const roos: string[] = [];
+					for (const j of unbans) {
+						const unbanName = Dex.getSpecies(j) ? Dex.getSpecies(j)!.name : Dex.getEffect(j) ?
+							Dex.getEffect(j)!.name : Dex.getTag(j) ? Dex.getTag(j)! : toID(j);
+						roos.push(unbanName);
+					}
+					buf += `${roos.sort().join(", ")}`;
+					buf += `</li>`;
+				}
+				buf += `</ul>`;
+				buf += `</details>`;
+				if (user.canPerform(room, 'voice')) {
+					return this.sayHtml(buf, Rooms.get('ruinsofalph') as Room);
+				} else {
+					return (Rooms.get('ruinsofalph') as Room).say(`/pminfobox ${user.id}, ${buf}`);
+				}
+			}
+		},
+		aliases: ['rulesets', 'customformats'],
 	},
 	/**
 	 * BOF commands

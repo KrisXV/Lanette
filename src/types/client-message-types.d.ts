@@ -1,5 +1,5 @@
 import { RoomType } from "../rooms";
-import { IFormat } from "../types/in-game-data-types";
+import { Format } from "../types/in-game-data-types";
 
 export interface IServerGroup {
 	name: string | null;
@@ -236,7 +236,7 @@ export interface ITournamentMessageTypes {
 	 * Format|Generator|Player cap
 	 */
 	create: {
-		readonly format: IFormat;
+		readonly format: Format;
 		readonly generator: string;
 		readonly playerCap: number;
 	};

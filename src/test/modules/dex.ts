@@ -2,20 +2,20 @@ import { assert, assertStrictEqual } from './../test-tools';
 
 describe("Dex", () => {
 	it('should compute all data types properly', () => {
-		for (const i in Dex.data.abilities) {
+		for (const i in Dex.data.Abilities) {
 			assert(Dex.getExistingAbility(i), i);
 		}
-		for (const i in Dex.data.formats) {
+		for (const i in Dex.data.Formats) {
 			assert(Dex.getExistingFormat(i), i);
 		}
-		for (const i in Dex.data.items) {
+		for (const i in Dex.data.Items) {
 			assert(Dex.getExistingItem(i), i);
 		}
-		for (const i in Dex.data.moves) {
+		for (const i in Dex.data.Movedex) {
 			assert(Dex.getExistingMove(i), i);
 		}
-		for (const i in Dex.data.pokedex) {
-			assert(Dex.getExistingPokemon(i), i);
+		for (const i in Dex.data.Pokedex) {
+			assert(Dex.getExistingSpecies(i), i);
 		}
 
 		// abilities
@@ -28,61 +28,61 @@ describe("Dex", () => {
 		assertStrictEqual(Dex.getDex('gen3').getExistingItem('Gold Berry').isNonstandard, 'Past');
 
 		// pokemon
-		assertStrictEqual(Dex.getDex('gen1').getExistingPokemon('Togepi').isNonstandard, 'Future');
-		assert(!Dex.getDex('gen2').getExistingPokemon('Togepi').isNonstandard);
-		assert(!Dex.getDex('gen4').getExistingPokemon('Pichu-Spiky-Eared').isNonstandard);
-		assertStrictEqual(Dex.getDex('gen5').getExistingPokemon('Pichu=Spiky-Eared').isNonstandard, 'Past');
+		assertStrictEqual(Dex.getDex('gen1').getExistingSpecies('Togepi').isNonstandard, 'Future');
+		assert(!Dex.getDex('gen2').getExistingSpecies('Togepi').isNonstandard);
+		assert(!Dex.getDex('gen4').getExistingSpecies('Pichu-Spiky-Eared').isNonstandard);
+		assertStrictEqual(Dex.getDex('gen5').getExistingSpecies('Pichu-Spiky-Eared').isNonstandard, 'Past');
 
-		assertStrictEqual(Dex.getExistingPokemon("Darmanitan").gen, 5);
-		assertStrictEqual(Dex.getExistingPokemon("Darmanitan-Zen").gen, 5);
-		assertStrictEqual(Dex.getExistingPokemon("Darmanitan-Galar").gen, 8);
-		assertStrictEqual(Dex.getExistingPokemon("Darmanitan-Galar-Zen").gen, 8);
-		assertStrictEqual(Dex.getExistingPokemon("Greninja").gen, 6);
-		assertStrictEqual(Dex.getExistingPokemon("Ash Greninja").gen, 7);
+		assertStrictEqual(Dex.getExistingSpecies("Darmanitan").gen, 5);
+		assertStrictEqual(Dex.getExistingSpecies("Darmanitan-Zen").gen, 5);
+		assertStrictEqual(Dex.getExistingSpecies("Darmanitan-Galar").gen, 8);
+		assertStrictEqual(Dex.getExistingSpecies("Darmanitan-Galar-Zen").gen, 8);
+		assertStrictEqual(Dex.getExistingSpecies("Greninja").gen, 6);
+		// assertStrictEqual(Dex.getExistingSpecies("Ash Greninja").gen, 7);
 
-		let pokemon = Dex.getExistingPokemon('Charizard');
-		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.species);
-		pokemon = Dex.getExistingPokemon('Lycanroc-Dusk');
-		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.species);
-		pokemon = Dex.getExistingPokemon('Rotom-Frost');
-		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.species);
-		// pokemon = Dex.getExistingPokemon('Pikachu-Gmax');
-		// assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.species);
+		let pokemon = Dex.getExistingSpecies('Charizard');
+		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.name);
+		pokemon = Dex.getExistingSpecies('Lycanroc-Dusk');
+		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.name);
+		pokemon = Dex.getExistingSpecies('Rotom-Frost');
+		assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.name);
+		// pokemon = Dex.getExistingSpecies('Pikachu-Gmax');
+		// assert(pokemon.allPossibleMoves.length > Object.keys(pokemon.learnset!).length, pokemon.name);
 
-		const houndour = Dex.getExistingPokemon('Houndour');
-		const houndoomMega = Dex.getExistingPokemon('Houndoom-Mega');
+		const houndour = Dex.getExistingSpecies('Houndour');
+		const houndoomMega = Dex.getExistingSpecies('Houndoom-Mega');
 		for (let i = 0; i < houndour.allPossibleMoves.length; i++) {
 			assert(houndoomMega.allPossibleMoves.includes(houndour.allPossibleMoves[i]));
 		}
 
-		const rattataAlola = Dex.getExistingPokemon('Rattata-Alola');
-		const raticateAlola = Dex.getExistingPokemon('Raticate-Alola');
+		const rattataAlola = Dex.getExistingSpecies('Rattata-Alola');
+		const raticateAlola = Dex.getExistingSpecies('Raticate-Alola');
 		for (let i = 0; i < rattataAlola.allPossibleMoves.length; i++) {
 			assert(raticateAlola.allPossibleMoves.includes(rattataAlola.allPossibleMoves[i]));
 		}
 
 		/*
-		assertStrictEqual(Dex.getExistingPokemon('Arceus').tier, 'Uber');
-		assertStrictEqual(Dex.getExistingPokemon('Arceus-Bug').tier, 'Uber');
-		assertStrictEqual(Dex.getExistingPokemon('Lurantis').tier, 'PU');
-		assertStrictEqual(Dex.getExistingPokemon('Lurantis-Totem').tier, 'PU');
+		assertStrictEqual(Dex.getExistingSpecies('Arceus').tier, 'Uber');
+		assertStrictEqual(Dex.getExistingSpecies('Arceus-Bug').tier, 'Uber');
+		assertStrictEqual(Dex.getExistingSpecies('Lurantis').tier, 'PU');
+		assertStrictEqual(Dex.getExistingSpecies('Lurantis-Totem').tier, 'PU');
 		*/
-		assertStrictEqual(Dex.getDex('gen1').getExistingPokemon('Togetic').tier, 'Illegal');
+		assertStrictEqual(Dex.getDex('gen1').getExistingSpecies('Togetic').tier, 'Illegal');
 
 		// moves
 		assertStrictEqual(Dex.getDex('gen6').getExistingMove('Baddy Bad').isNonstandard, 'Future');
 		assertStrictEqual(Dex.getDex('gen7').getExistingMove('Baddy Bad').isNonstandard, 'LGPE');
 
 		// other in-game data
-		for (let i = 0; i < Dex.data.badges.length; i++) {
-			assert(Dex.data.badges.indexOf(Dex.data.badges[i]) === i, "Duplicate badge " + Dex.data.badges[i]);
+		for (let i = 0; i < Dex.data.Badges.length; i++) {
+			assert(Dex.data.Badges.indexOf(Dex.data.Badges[i]) === i, "Duplicate badge " + Dex.data.Badges[i]);
 		}
 
-		for (let i = 0; i < Dex.data.characters.length; i++) {
-			assert(Dex.data.characters.indexOf(Dex.data.characters[i]) === i, "Duplicate character " + Dex.data.characters[i]);
+		for (let i = 0; i < Dex.data.Characters.length; i++) {
+			assert(Dex.data.Characters.indexOf(Dex.data.Characters[i]) === i, "Duplicate Character " + Dex.data.Characters[i]);
 		}
 
-		const categoryKeys = Object.keys(Dex.data.categories);
+		const categoryKeys = Object.keys(Dex.data.Categories);
 		for (let i = 0; i < categoryKeys.length; i++) {
 			assert(toID(categoryKeys[i]) === categoryKeys[i], categoryKeys[i] + " should be an ID in categories.js");
 			assert(categoryKeys.indexOf(categoryKeys[i]) === i, "Duplicate category for " + categoryKeys[i]);
@@ -95,27 +95,27 @@ describe("Dex", () => {
 	it('should return proper values from getEvolutionLines()', () => {
 		const pokemon = ['Charmander', 'Charmeleon', 'Charizard'];
 		for (let i = 0; i < pokemon.length; i++) {
-			const evolutionLines = Dex.getEvolutionLines(Dex.getExistingPokemon(pokemon[i]));
+			const evolutionLines = Dex.getEvolutionLines(Dex.getExistingSpecies(pokemon[i]));
 			assertStrictEqual(evolutionLines.length, 1);
 			assertStrictEqual(evolutionLines[0].join(","), 'Charmander,Charmeleon,Charizard');
 		}
 
-		let evolutionLines = Dex.getEvolutionLines(Dex.getExistingPokemon('Ditto'));
+		let evolutionLines = Dex.getEvolutionLines(Dex.getExistingSpecies('Ditto'));
 		assertStrictEqual(evolutionLines.length, 1);
 		assertStrictEqual(evolutionLines[0].join(','), 'Ditto');
 
-		evolutionLines = Dex.getEvolutionLines(Dex.getExistingPokemon('Gloom'));
+		evolutionLines = Dex.getEvolutionLines(Dex.getExistingSpecies('Gloom'));
 		assertStrictEqual(evolutionLines.length, 2);
 		assertStrictEqual(evolutionLines[0].join(","), 'Oddish,Gloom,Vileplume');
 		assertStrictEqual(evolutionLines[1].join(","), 'Oddish,Gloom,Bellossom');
-		evolutionLines = Dex.getEvolutionLines(Dex.getExistingPokemon('Vileplume'));
+		evolutionLines = Dex.getEvolutionLines(Dex.getExistingSpecies('Vileplume'));
 		assertStrictEqual(evolutionLines.length, 1);
 		assertStrictEqual(evolutionLines[0].join(","), 'Oddish,Gloom,Vileplume');
-		evolutionLines = Dex.getEvolutionLines(Dex.getExistingPokemon('Bellossom'));
+		evolutionLines = Dex.getEvolutionLines(Dex.getExistingSpecies('Bellossom'));
 		assertStrictEqual(evolutionLines.length, 1);
 		assertStrictEqual(evolutionLines[0].join(","), 'Oddish,Gloom,Bellossom');
 
-		evolutionLines = Dex.getEvolutionLines(Dex.getExistingPokemon('Tyrogue'));
+		evolutionLines = Dex.getEvolutionLines(Dex.getExistingSpecies('Tyrogue'));
 		assertStrictEqual(evolutionLines.length, 3);
 		assertStrictEqual(evolutionLines[0].join(","), 'Tyrogue,Hitmonlee');
 		assertStrictEqual(evolutionLines[1].join(","), 'Tyrogue,Hitmonchan');
@@ -143,7 +143,7 @@ describe("Dex", () => {
 		const abilities = Dex.getAbilitiesList().map(x => x.name);
 		const items = Dex.getItemsList().map(x => x.name);
 		const moves = Dex.getMovesList().map(x => x.name);
-		const pokemon = Dex.getPokemonList().map(x => x.species);
+		const pokemon = Dex.getSpeciesList().map(x => x.name);
 
 		assert(!abilities.includes(Dex.getExistingAbility('No Ability').name));
 
@@ -152,20 +152,20 @@ describe("Dex", () => {
 		assert(!items.includes(Dex.getExistingItem('Crucibellite').name));
 		assert(!moves.includes(Dex.getExistingMove('Baddy Bad').name));
 		assert(!moves.includes(Dex.getExistingMove('Paleo Wave').name));
-		assert(!pokemon.includes(Dex.getExistingPokemon('Pikachu-Starter').species));
-		assert(!pokemon.includes(Dex.getExistingPokemon('Voodoom').species));
-		assert(!pokemon.includes(Dex.getExistingPokemon('Missingno.').species));
-		assert(!pokemon.includes(Dex.getExistingPokemon('Pokestar Smeargle').species));
+		assert(!pokemon.includes(Dex.getExistingSpecies('Pikachu-Starter').name));
+		assert(!pokemon.includes(Dex.getExistingSpecies('Voodoom').name));
+		assert(!pokemon.includes(Dex.getExistingSpecies('Missingno.').name));
+		assert(!pokemon.includes(Dex.getExistingSpecies('Pokestar Smeargle').name));
 
 		// not available in Sword/Shield
 		assert(items.includes(Dex.getExistingItem('Abomasite').name));
 		assert(moves.includes(Dex.getExistingMove('Aeroblast').name));
-		assert(pokemon.includes(Dex.getExistingPokemon('Bulbasaur').species));
+		assert(pokemon.includes(Dex.getExistingSpecies('Bulbasaur').name));
 
 		// available in Sword/Shield
 		assert(abilities.includes(Dex.getExistingAbility('Intimidate').name));
 		assert(items.includes(Dex.getExistingItem('Choice Scarf').name));
 		assert(moves.includes(Dex.getExistingMove('Tackle').name));
-		assert(pokemon.includes(Dex.getExistingPokemon('Charmander').species));
+		assert(pokemon.includes(Dex.getExistingSpecies('Charmander').name));
 	});
 });

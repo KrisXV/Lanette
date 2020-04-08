@@ -16,8 +16,8 @@ const archivedDatabasesDir = path.join(Tools.rootFolder, 'archived-databases');
 const databasesDir = path.join(Tools.rootFolder, 'databases');
 const baseOfflineMessageLength = '[28 Jun 2019, 00:00:00 GMT-0500] **** said: '.length;
 
-interface IStorageWorkers {
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+interface IStorageWorkers {}
 
 export class Storage {
 	databases: Dict<IDatabase> = {};
@@ -31,7 +31,7 @@ export class Storage {
 		this.globalDatabaseExportInterval = this.setGlobalDatabaseExportInterval();
 	}
 
-	onReload(previous: Partial<Storage>) {
+	onReload(previous: Partial<Storage>): void {
 		if (previous.databases) this.databases = previous.databases;
 		if (previous.loadedDatabases) this.loadedDatabases = previous.loadedDatabases;
 
@@ -76,13 +76,13 @@ export class Storage {
 		Tools.safeWriteFileSync(path.join(databasesDir, roomid + '.json'), contents);
 	}
 
-	exportAuctionDatabase() {
+	exportAuctionDatabase(): void {
 		if (!(auctionDatabaseId in this.databases)) return;
 		const contents = JSON.stringify(this.databases[auctionDatabaseId]);
 		Tools.safeWriteFileSync(path.join(databasesDir, auctionDatabaseId + '.json'), contents);
 	}
 
-	archiveDatabase(roomid: string) {
+	archiveDatabase(roomid: string): void {
 		if (!(roomid in this.databases) || roomid.startsWith('battle-') || roomid.startsWith('groupchat-')) return;
 		const date = new Date();
 		const year = date.getFullYear();

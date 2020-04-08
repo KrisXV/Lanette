@@ -34,14 +34,15 @@ export class Room {
 		this.type = type;
 	}
 
-	deInit() {
+	deInit(): void {
 		this.users.forEach(user => {
 			user.rooms.delete(this);
 			if (!user.rooms.size) Users.remove(user);
 		});
 	}
 
-	checkConfigSettings() {}
+	// eslint-disable-next-line @typescript-eslint/no-empty-function
+	checkConfigSettings(): void {}
 
 	onRoomInfoResponse(response: IRoomInfoResponse): void {
 		this.modchat = response.modchat === false ? 'off' : response.modchat;

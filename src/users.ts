@@ -50,7 +50,7 @@ export class User {
 		return !(status === 'busy' || status === 'idle' || status === 'away');
 	}
 
-	canPerform(room: Room, targetRank = 'roomowner' as GroupName) {
+	canPerform(room: Room, targetRank = 'roomowner' as GroupName): boolean {
 		return this.hasRank(room, targetRank) || this.isDeveloper();
 	}
 
@@ -60,7 +60,7 @@ export class User {
 		return false;
 	}
 
-	say(message: string, dontPrepare?: boolean, dontCheckFilter?: boolean) {
+	say(message: string, dontPrepare?: boolean, dontCheckFilter?: boolean): void {
 		if (!dontPrepare) message = Tools.prepareMessage(message);
 		if (!dontCheckFilter && Client.willBeFiltered(message)) return;
 		Client.send("|/pm " + this.name + ", " + message);
