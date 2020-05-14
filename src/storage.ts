@@ -331,8 +331,8 @@ export class Storage {
 
 	updateLastSeen(user: User, time: number): void {
 		const database = this.getGlobalDatabase();
-		if (!database.lastSeen) database.lastSeen = {};
-		database.lastSeen[user.id] = time;
+		// if (!database.lastSeen) database.lastSeen = {};
+		// database.lastSeen[user.id] = time;
 	}
 }
 

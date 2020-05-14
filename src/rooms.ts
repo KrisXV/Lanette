@@ -67,6 +67,11 @@ export class Room {
 	}
 
 	checkConfigSettings(): void {
+<<<<<<< HEAD
+=======
+		this.logChatMessages = !this.id.startsWith('battle-') && !this.id.startsWith('groupchat-') && !!(Config.allowChatLogging &&
+			Config.allowChatLogging.includes(this.id));
+>>>>>>> Add stuff
 		this.unlinkTournamentReplays = Config.disallowTournamentBattleLinks && Config.disallowTournamentBattleLinks.includes(this.id) ?
 			true : false;
 		this.unlinkChallongeLinks = Config.allowUserHostedTournaments && Config.allowUserHostedTournaments.includes(this.id) ? true : false;

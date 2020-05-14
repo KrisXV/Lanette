@@ -80,11 +80,34 @@ export class User {
 		return !(status === 'busy' || status === 'idle' || status === 'away');
 	}
 
+<<<<<<< HEAD
 	say(message: string, options?: IUserMessageOptions): void {
 		if (!(options && options.dontPrepare)) message = Tools.prepareMessage(message);
 		if (!(options && options.dontCheckFilter) && Client.willBeFiltered(message)) return;
 
 		Client.send({message: "|/pm " + this.name + ", " + message, type: 'pm', user: this.id, measure: !(options && options.dontMeasure)});
+=======
+	canPerform(room: Room, targetRank: GroupName = 'roomowner'): boolean {
+		return this.hasRank(room, targetRank) || this.isDeveloper();
+	}
+
+	isHost(room: Room): boolean {
+		const hosts = Storage.getDatabase(room).hosts;
+		if (hosts) return hosts.includes(this.id);
+		return false;
+	}
+
+	isEmojiWhitelisted(room: Room): boolean {
+		const storage = Storage.getDatabase(room);
+		if (!storage.emojiWhitelist) return false;
+		return storage.emojiWhitelist.includes(this.id);
+	}
+
+	say(message: string, dontPrepare?: boolean, dontCheckFilter?: boolean): void {
+		if (!dontPrepare) message = Tools.prepareMessage(message);
+		if (!dontCheckFilter && Client.willBeFiltered(message)) return;
+		Client.send("|/pm " + this.name + ", " + message);
+>>>>>>> Add stuff
 	}
 
 	sayCommand(command: string, dontCheckFilter?: boolean): void {

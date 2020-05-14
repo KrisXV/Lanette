@@ -62,6 +62,7 @@ const tagNames: Dict<string> = {
 	'allitems': 'All Items',
 	'allmoves': 'All Moves',
 	'allabilities': 'All Abilities',
+	'nonexistent': 'Nonexistent',
 };
 
 const clauseNicknames: Dict<string> = {
@@ -126,6 +127,7 @@ export class Dex {
 	formatNamesByCustomRules: Dict<string> = {};
 	readonly omotms: string[] = [];
 	readonly tagNames: typeof tagNames = tagNames;
+	readonly dexes: Dict<Dex>;
 
 	readonly clientDataDirectory: string;
 	readonly currentMod: string;
@@ -168,6 +170,7 @@ export class Dex {
 		const pokemonShowdownDexBase = require(path.join(Tools.pokemonShowdownFolder, simDist, "dex.js")).Dex as IPokemonShowdownDex;
 
 		const isBase = mod === 'base';
+		this.dexes = dexes;
 		if (isBase) {
 			dexes['base'] = this;
 			dexes[CURRENT_GEN_STRING] = this;
@@ -1229,6 +1232,11 @@ export class Dex {
 		const format = this.getFormat(name, isTrusted);
 		if (!format) throw new Error("No format returned for '" + name + "'");
 		return format;
+	}
+
+	getTag(tag: string): string | null {
+		if (!(Tools.toId(tag) in tagNames)) return null;
+		return tagNames[Tools.toId(tag)];
 	}
 
 	getFormatInfoDisplay(format: IFormat): string {
