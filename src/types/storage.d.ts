@@ -57,6 +57,28 @@ export interface IDatabase {
 	userHostedGameCount?: number;
 	userHostedGameQueue?: IQueuedUserHostedGame[];
 	userHostStatuses?: Dict<UserHostStatus>;
+	hosts?: string[];
+	tourRuleset?: string[];
+	tourcfg?: {
+		autodq: {
+			randoms: number | 'off';
+			normal: number | 'off';
+		};
+		autostart: number | 'off';
+	};
+	samples?: Dict<string[]>;
+	ruleset?: {
+		[k: string]: {
+			name: string;
+			baseFormat: string;
+			remrules: string[];
+			addrules: string[];
+			bans: string[];
+			unbans: string[];
+			aliases?: string[];
+		};
+	};
+	emojiWhitelist?: string[];
 }
 
 interface IOfflineMessage {
@@ -70,4 +92,5 @@ interface IOfflineMessage {
 export interface IGlobalDatabase {
 	lastSeen?: Dict<number>;
 	offlineMessages?: Dict<IOfflineMessage[]>;
+	emojis?: Dict<string>;
 }

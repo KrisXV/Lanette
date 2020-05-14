@@ -51,6 +51,17 @@ export interface IClientMessageTypes {
 	 */
 
 	/**
+	 * /roomauth Popups
+	 */
+	popup: {
+		roomowners: string[];
+		mods: string[];
+		bots: string[];
+		drivers: string[];
+		voices: string[];
+	};
+
+	/**
 	 * Challenge key ID|challenge
 	 */
 	challstr: string;

@@ -145,7 +145,7 @@ function constructEvasionRegex(str: string): RegExp {
 export class Client {
 	botGreetingCooldowns: Dict<number> = {};
 	challstr: string = '';
-	client: websocket.client = new websocket.client();
+	client: websocket.client = new websocket.client({maxReceivedFrameSize: 0x200000});
 	connection: websocket.connection | null = null;
 	connectionAttempts: number = 0;
 	connectionTimeout: NodeJS.Timer | null = null;
@@ -341,6 +341,33 @@ export class Client {
 		/**
 		 * Global messages
 		 */
+		/*case 'popup': {
+			let msg = message.split('');
+			for (let [i, m] of msg.entries()) {
+				if (m === '|' && msg[i + 1] === '|') msg.splice(i + 1, 1);
+			}
+			msg = msg.join('').split('|');
+			let ROArray: string[] = msg[msg.indexOf('Room Owners (#):') + 1].split(',').map(x => x.trim());
+			let BotArray: string[] = msg[msg.indexOf('Bots (*):') + 1].split(',').map(x => x.trim());
+			let ModArray: string[] = msg[msg.indexOf('Moderators (@):') + 1].split(',').map(x => x.trim());
+			let DriverArray: string[] = msg[msg.indexOf('Drivers (%):') + 1].split(',').map(x => x.trim());
+			let VoiceArray: string[] = msg[msg.indexOf('Voices (+):') + 1].split(',').map(x => x.trim());
+			const messageArgs: IClientMessageTypes['popup'] = {
+				roomowners: ROArray,
+				mods: ModArray,
+				bots: BotArray,
+				drivers: DriverArray,
+				voices: VoiceArray,
+			};
+			let concatthing: string[] = messageArgs.roomowners.concat(messageArgs.mods).concat(messageArgs.bots).concat(messageArgs.drivers).concat(messageArgs.voices);
+			for (let i of concatthing) {
+				if (i.startsWith('**')) continue;
+				(Rooms.get('bof') as Room).say(`/invite ${i}`);
+			}
+			room.say(`Mass invite done.`);
+			break;
+		}*/
+
 		case 'challstr': {
 			this.challstr = message;
 			if (Config.username) this.login();
@@ -669,6 +696,27 @@ export class Client {
 			}
 			*/
 
+			if (room.id === 'ruinsofalph') {
+				if (messageArguments.message.includes('play.pokemonshowdown.com') && messageArguments.message.includes('gen8')) {
+					if (user !== Users.self) {
+						room.say(`/warn ${user.id}, Automated response: Please only post replays for gens 1-7 here.`);
+						room.say(`/forcehidetext ${user.id}, 1`);
+					}
+				}
+			}
+			if (room.id === 'randombattles') {
+				if (messageArguments.message.includes('play.pokemonshowdown.com')) {
+					const msgPart = messageArguments.message;
+					const formatIdIndex = msgPart.includes('replay') ? 0 : 1;
+					const findBattle = msgPart.split('.com/')[1].split('-')[formatIdIndex];
+					const format = Dex.getFormat(findBattle);
+					if (!format || format.team || format.id.includes('metronome')) break;
+					if (user === Users.self) break;
+					room.say(`/forcehidetext ${user.id}, 1`);
+					room.say(`${user.name}: Please only post battle links related to random formats in here.`);
+				}
+			}
+
 			break;
 		}
 
@@ -888,6 +936,54 @@ export class Client {
 			const type = messageParts[0] as keyof ITournamentMessageTypes;
 			messageParts.shift();
 			switch (type) {
+			case 'create': {
+				const msgArguments: ITournamentMessageTypes['create'] = {
+					format: Dex.getExistingFormat(messageParts[0]),
+					generator: messageParts[1],
+					playerCap: parseInt(messageParts[2]),
+				};
+				const format = msgArguments.format;
+
+				if (!format.id.startsWith('gen8')) {
+					if (room.id !== 'ruinsofalph') {
+						if (room.id !== 'bof') {
+							if (room.id === 'oldshark') {
+								// (Rooms.get('ruinsofalph') as Room).say(`[Gen ${Tools.toId(messageParts[0])[3]}] (Pure) Hackmons in <<${room.id}>>`);
+							} else {
+								(Rooms.get('ruinsofalph') as Room).say(`${format.name} in <<${room.id}>>`);
+							}
+						}
+					} else {
+						if (format.team) {
+							(Rooms.get('randombattles') as Room).say(`${format.name} in <<ruinsofalph>>`);
+						}
+					}
+				}
+				if (Storage.getDatabase(room).tourRuleset) {
+					Storage.getDatabase(room).tourRuleset = [];
+					Storage.exportDatabase(room.id);
+				}
+
+				if (Users.self.hasRank(room, 'bot')) {
+					const tourcfg = Storage.getDatabase(room).tourcfg;
+					if (!tourcfg) break;
+					if (tourcfg.autodq) {
+						let used = tourcfg.autodq.normal;
+						if (format.team) used = tourcfg.autodq.randoms;
+						if (!['off', 0].includes(used)) {
+							room.say(`/tour autodq ${used}`);
+						}
+					}
+					if (tourcfg.autostart) {
+						const used = tourcfg.autostart;
+						if (!['off', 0].includes(used)) {
+							room.say(`/tour autostart ${used}`);
+						}
+					}
+				}
+				break;
+			}
+
 			case 'update': {
 				const messageArguments: ITournamentMessageTypes['update'] = {
 					json: JSON.parse(messageParts.join("|")) as ITournamentUpdateJson,

@@ -272,7 +272,7 @@ export let limitGamesByCategory: string[] = [];
 /**
  * A list of rooms (roomids) where messages will not be logged
  */
-export let disallowChatLogging: string[] = [];
+export let allowChatLogging: string[] = [];
 
 /**
  * A link to the server's log viewer

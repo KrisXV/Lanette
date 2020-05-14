@@ -4,6 +4,7 @@ import { Game } from "../room-game";
 import { Room } from "../rooms";
 import { IGameFile, AchievementsDict, GameCommandReturnType } from "../types/games";
 import { User } from "../users";
+import { StatName } from "../types/dex";
 
 interface ICaughtPokemon {
 	points: number;
@@ -50,8 +51,8 @@ class TaurosSafariZone extends Game {
 		for (const pokemon of pokemonList) {
 			data.pokedex.push(pokemon.id);
 			let bst = 0;
-			for (const stat in pokemon.baseStats) {
-				// @ts-expect-error
+			let stat: StatName;
+			for (stat in pokemon.baseStats) {
 				bst += pokemon.baseStats[stat];
 			}
 			data.baseStatTotals[pokemon.id] = bst;

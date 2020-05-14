@@ -89,6 +89,7 @@ const tagNames: Dict<string> = {
 	'allitems': 'All Items',
 	'allmoves': 'All Moves',
 	'allabilities': 'All Abilities',
+	'nonexistent': 'Nonexistent',
 };
 
 const clauseNicknames: Dict<string> = {
@@ -196,6 +197,7 @@ export class Dex {
 	readonly formatsPath: typeof formatsPath = formatsPath;
 	readonly omotms: string[] = [];
 	readonly tagNames: typeof tagNames = tagNames;
+	readonly dexes: Dict<Dex>;
 
 	readonly abilityCache = new Map<string, IAbility>();
 	readonly allPossibleMovesCache = new Map<string, string[]>();
@@ -217,9 +219,10 @@ export class Dex {
 		if (!gen) gen = currentGen;
 		if (!mod) mod = 'base';
 		const isBase = mod === 'base';
+		this.dexes = dexes;
 		if (isBase) {
-			dexes['base'] = this;
-			dexes[currentGenString] = this;
+			this.dexes['base'] = this;
+			this.dexes[currentGenString] = this;
 		}
 		this.currentMod = mod;
 		this.gen = gen;
@@ -263,7 +266,7 @@ export class Dex {
 
 	getDex(mod?: string): Dex {
 		if (!mod) mod = currentGenString;
-		return dexes[mod];
+		return this.dexes[mod];
 	}
 
 	async loadAllData(): Promise<void> {
@@ -273,8 +276,8 @@ export class Dex {
 		await this.loadData();
 		for (let i = this.gen - 1; i >= 1; i--) {
 			const mod = 'gen' + i;
-			dexes[mod] = new Dex(i, mod);
-			await dexes[mod].loadData();
+			this.dexes[mod] = new Dex(i, mod);
+			await this.dexes[mod].loadData();
 		}
 
 		console.log("Loaded all dex data");
@@ -1174,6 +1177,11 @@ export class Dex {
 		return format;
 	}
 
+	getTag(tag: string): string | null {
+		if (!(Tools.toId(tag) in tagNames)) return null;
+		return tagNames[Tools.toId(tag)];
+	}
+
 	getFormatInfoDisplay(format: IFormat): string {
 		let html = '';
 		if (format.desc) {
@@ -1235,7 +1243,7 @@ export class Dex {
 
 	getRuleTable(format: IFormat, depth = 1, repeals?: Map<string, number>): RuleTable {
 		if (format.ruleTable && !repeals) return format.ruleTable;
-		if (depth === 1 && dexes[format.mod || 'base'] !== this) {
+		if (depth === 1 && this.dexes[format.mod || 'base'] !== this) {
 			// throw new Error(`${format.mod} ${this.currentMod}`);
 			return this.getDex(format.mod).getRuleTable(format, depth + 1);
 		}
@@ -1626,6 +1634,59 @@ export class Dex {
 			html.push("&nbsp;&nbsp;&nbsp;&nbsp;<b>Removed rules</b>: " + format.separatedCustomRules.removedrules.join(", "));
 		}
 		return html.join("<br />");
+	}
+
+	getValidator(formatid?: string | IFormat): TeamValidator {
+		let format;
+		if (formatid) {
+			format = typeof formatid === 'string' ? this.getExistingFormat(formatid) : formatid;
+		} else {
+			format = this.getExistingFormat('gen' + this.gen + 'ou');
+		}
+		return TeamValidator.get(format);
+	}
+
+	/*
+		pokemon-showdown compatibility
+	*/
+
+	forFormat(formatid: string | IFormat): Dex {
+		const format = typeof formatid === 'string' ? this.getExistingFormat(formatid) : formatid;
+		dexes['base'].loadData();
+		const dex = this.dexes[format.mod || 'base'];
+		if (dex !== this.dexes['base']) dex.loadData();
+		return dex;
+	}
+
+	mod(mod: string | undefined): Dex {
+		if (!dexes['base'].loadedMods) this.dexes['base'].includeMods();
+		return this.dexes[mod || 'base'];
+	}
+
+	getEffect(name: string): IAbility | IMove | IItem | null {
+		name = name.trim().toLowerCase();
+		const id = Tools.toId(name);
+		let effect: IAbility | IMove | IItem | null = null;
+		if (name.startsWith('move:')) {
+			effect = this.getMove(name.slice(5));
+		} else if (name.startsWith('item:')) {
+			effect = this.getItem(name.slice(5));
+		} else if (name.startsWith('ability:')) {
+			effect = this.getAbility(name.slice(8));
+		} else {
+			if (id in this.data.moves) {
+				effect = this.getMove(id);
+			} else if (id in this.data.items) {
+				effect = this.getItem(id);
+			} else if (id in this.data.abilities) {
+				effect = this.getAbility(id);
+			}
+		}
+		return effect;
+	}
+
+	getSpecies(name: string | IPokemon): IPokemon | null {
+		return this.getPokemon(typeof name === 'string' ? name : name.name);
 	}
 
 	private getAllEvolutionLines(pokemon: IPokemon, prevoList?: string[], evolutionLines?: string[][]): string[][] {
