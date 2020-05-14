@@ -50,8 +50,8 @@ class TaurosSafariZone extends ScriptedGame {
 		for (const pokemon of listWithFormes) {
 			data.pokedex.push(pokemon.id);
 			let bst = 0;
-			for (const stat in pokemon.baseStats) {
-				// @ts-expect-error
+			let stat: StatName;
+			for (stat in pokemon.baseStats) {
 				bst += pokemon.baseStats[stat];
 			}
 			data.baseStatTotals[pokemon.id] = bst;

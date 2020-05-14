@@ -863,6 +863,55 @@ export class Tools {
 		fs.writeFileSync(tempFilepath, data);
 		fs.renameSync(tempFilepath, filepath);
 	}
+
+	// eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+	uploadToHastebin(text: string, callback: (k: string) => void): false | void {
+		if (typeof callback !== 'function') return false;
+		const action = url.parse('https://hastebin.com/documents');
+		const options = {
+			hostname: action.hostname,
+			path: action.pathname,
+			method: 'POST',
+		};
+
+		const request = https.request(options, response => {
+			response.setEncoding('utf8');
+			let data = '';
+			response.on('data', chunk => {
+				data += chunk;
+			});
+			response.on('end', () => {
+				let key;
+				try {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+					const pageData = JSON.parse(data);
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+					key = pageData.key;
+				} catch (e) {
+					if (/^[^<]*<!DOCTYPE html>/.test(data)) {
+						return callback('Cloudflare-related error uploading to Hastebin: ' + e.message);
+					} else {
+						return callback('Unknown error uploading to Hastebin: ' + e.message);
+					}
+				}
+				callback('https://hastebin.com/raw/' + key);
+			});
+		});
+		request.on('error', error => console.log('Login error: ' + error.stack));
+
+		if (text) request.write(text);
+		request.end();
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	/*
+	async runUpdatePS(user?: User): Promise<any> {
+		await exec('node update-ps.js --hotpatch');
+
+		if (!user) user = Users.self;
+		await CommandParser.parse(user, user, Config.commandCharacter + 'reload dex');
+	}
+	*/
 }
 
 export const instantiate = (): void => {

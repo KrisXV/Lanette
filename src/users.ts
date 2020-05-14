@@ -127,6 +127,22 @@ export class User {
 		});
 	}
 
+	canPerform(room: Room, targetRank: GroupName = 'roomowner'): boolean {
+		return this.hasRank(room, targetRank) || this.isDeveloper();
+	}
+
+	isHost(room: Room): boolean {
+		const hosts = Storage.getDatabase(room).hosts;
+		if (hosts) return hosts.includes(this.id);
+		return false;
+	}
+
+	isEmojiWhitelisted(room: Room): boolean {
+		const storage = Storage.getDatabase(room);
+		if (!storage.emojiWhitelist) return false;
+		return storage.emojiWhitelist.includes(this.id);
+	}
+
 	sayCommand(command: string, dontCheckFilter?: boolean): void {
 		this.say(command, {dontCheckFilter, dontPrepare: true, dontMeasure: true, type: 'command'});
 	}
