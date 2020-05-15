@@ -193,7 +193,6 @@ export class RuleTable extends Map<string, string> {
 export class Dex {
 	// exported constants
 	readonly currentGenString: typeof currentGenString = currentGenString;
-	dexes: Dict<Dex> = dexes;
 	readonly formatsPath: typeof formatsPath = formatsPath;
 	readonly omotms: string[] = [];
 	readonly tagNames: typeof tagNames = tagNames;
@@ -1636,16 +1635,6 @@ export class Dex {
 		return html.join("<br />");
 	}
 
-	getValidator(formatid?: string | IFormat): TeamValidator {
-		let format;
-		if (formatid) {
-			format = typeof formatid === 'string' ? this.getExistingFormat(formatid) : formatid;
-		} else {
-			format = this.getExistingFormat('gen' + this.gen + 'ou');
-		}
-		return TeamValidator.get(format);
-	}
-
 	/*
 		pokemon-showdown compatibility
 	*/
@@ -1658,15 +1647,10 @@ export class Dex {
 		return dex;
 	}
 
-	mod(mod: string | undefined): Dex {
-		if (!dexes['base'].loadedMods) this.dexes['base'].includeMods();
-		return this.dexes[mod || 'base'];
-	}
-
-	getEffect(name: string): IAbility | IMove | IItem | null {
+	getEffect(name: string): IAbility | IMove | IItem | undefined {
 		name = name.trim().toLowerCase();
 		const id = Tools.toId(name);
-		let effect: IAbility | IMove | IItem | null = null;
+		let effect: IAbility | IMove | IItem | undefined;
 		if (name.startsWith('move:')) {
 			effect = this.getMove(name.slice(5));
 		} else if (name.startsWith('item:')) {
@@ -1674,18 +1658,18 @@ export class Dex {
 		} else if (name.startsWith('ability:')) {
 			effect = this.getAbility(name.slice(8));
 		} else {
-			if (id in this.data.moves) {
+			if (this.data.moveKeys.includes(id)) {
 				effect = this.getMove(id);
-			} else if (id in this.data.items) {
+			} else if (this.data.itemKeys.includes(id)) {
 				effect = this.getItem(id);
-			} else if (id in this.data.abilities) {
+			} else if (this.data.abilityKeys.includes(id)) {
 				effect = this.getAbility(id);
 			}
 		}
 		return effect;
 	}
 
-	getSpecies(name: string | IPokemon): IPokemon | null {
+	getSpecies(name: string | IPokemon): IPokemon | undefined {
 		return this.getPokemon(typeof name === 'string' ? name : name.name);
 	}
 
