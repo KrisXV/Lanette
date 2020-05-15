@@ -127,7 +127,6 @@ export class Dex {
 	formatNamesByCustomRules: Dict<string> = {};
 	readonly omotms: string[] = [];
 	readonly tagNames: typeof tagNames = tagNames;
-	readonly dexes: Dict<Dex>;
 
 	readonly clientDataDirectory: string;
 	readonly currentMod: string;
