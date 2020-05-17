@@ -13,7 +13,7 @@
     },
     "globals": {
         "BaseCommands": false, "Client": false, "CommandParser": false, "Commands": false, "Config": false,
-        "Dex": false, "Games": false, "Rooms": false, "Storage": false, "tempConfig": false,
+        "Dex": false, "Games": false, "Plugins": false, "Rooms": false, "Storage": false, "tempConfig": false,
         "toID": false, "Tools": false, "Tournaments": false, "Users": false
     },
     "plugins": [

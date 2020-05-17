@@ -18,6 +18,7 @@ declare global {
 	const Config: Partial<typeof config>;
 	const Dex: Dex;
 	const Games: Games;
+	const Plugins: Array<any> | undefined;
 	const Rooms: Rooms;
 	const Storage: Storage;
 	const tempConfig: boolean;

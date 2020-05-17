@@ -337,6 +337,13 @@ export class Client {
 			}
 		}
 		const messageParts = message.split("|");
+		if (Plugins) {
+			for (const plugin of Plugins) {
+				if (typeof plugin.parseMessage === 'function') {
+					plugin.parseMessage(room, messageType);
+				}
+			}
+		}
 		switch (messageType) {
 		/**
 		 * Global messages
