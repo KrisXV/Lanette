@@ -1,5 +1,3 @@
-import * as fs from 'fs';
-
 import * as tools from './tools';
 global.Tools = new tools.Tools();
 
@@ -42,12 +40,14 @@ global.Tournaments = new tournaments.Tournaments();
 import * as users from './users';
 global.Users = new users.Users();
 
+import fs = require('fs');
+import path = require('path');
 let pluginsList = [];
-let plugins = fs.readdirSync('./plugins');
+let plugins = fs.readdirSync(path.join(Tools.rootFolder, 'src', 'plugins'));
 for (const fileName of plugins) {
-	if (!fileName.endsWith('.ts') || fileName.startsWith('example-')) continue;
+	if (!fileName.endsWith('.js') || fileName.startsWith('example-')) continue;
 	if (!pluginsList) pluginsList = [];
-	const file = require('./plugins/' + fileName);
+	const file = require(path.join(Tools.rootFolder, 'src', 'plugins', fileName));
 	if (file.name) {
 		(global as any)[file.name] = file;
 		if (typeof file.onLoad === 'function') file.onLoad();

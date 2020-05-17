@@ -9,10 +9,10 @@
  *
  * @license MIT license
  */
+'use strict';
 
-import { ICommandDefinition } from "../command-parser";
-
-const commands: Dict<ICommandDefinition> = {
+/** @type {Dict<ICommandDefinition>} */
+const commands = {
 	about: {
         command(target, room, user) {
             if (!this.isPm(room) && !user.hasRank(room, 'voice')) return;
@@ -21,4 +21,4 @@ const commands: Dict<ICommandDefinition> = {
 	},
 };
 
-exports = commands;
+exports.commands = commands;

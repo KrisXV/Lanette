@@ -9,23 +9,16 @@
  *
  * @license MIT license
  */
+'use strict';
 
-import { ICommandDefinition } from "../command-parser";
-
-const commands: Dict<ICommandDefinition> = {
-	about: {
-        command(target, room, user) {
-            if (!this.isPm(room) && !user.hasRank(room, 'voice')) return;
-            this.say("test");
-        },
+const commands = {
+	about: function (target, room, user) {
+		if (!(room instanceof Users.User) && !user.hasRank(room, '+')) return;
+		this.say("test");
 	},
 };
 
-export class Plugin {
-    name: string;
-    data: any;
-    commands: Dict<ICommandDefinition>;
-
+class Plugin {
 	constructor() {
 		this.name = "Example";
 		this.data = {};
@@ -40,3 +33,5 @@ export class Plugin {
 		// initialization that requires the plugin to be in the global namespace
 	}
 }
+
+module.exports = new Plugin();
