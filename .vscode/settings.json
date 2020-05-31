@@ -1,5 +1,6 @@
 {
 	"typescript.tsdk": "node_modules/typescript/lib",
+	"typescript.format.semicolons": "insert",
 	"search.exclude": {
 		"**/.github": true,
 		"**/.vscode": true,
