@@ -147,6 +147,8 @@ export interface IDatabase {
 		};
 	};
 	emojiWhitelist?: string[];
+	lastTour?: number;
+	nationalDexUUBL?: string[];
 }
 
 interface IOfflineMessage {
@@ -162,4 +164,5 @@ export interface IGlobalDatabase {
 	loginSessionCookie?: string;
 	offlineMessages?: Dict<{messages: IOfflineMessage[], timezone?: TimeZone}>;
 	emojis?: Dict<string>;
+	privateRooms?: string[];
 }

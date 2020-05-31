@@ -916,6 +916,38 @@ export class Client {
 		/**
 		 * Global messages
 		 */
+		case 'popup': {
+			let msg = message.split('');
+			for (let [i, m] of msg.entries()) {
+				if (m === '|' && msg[i + 1] === '|') msg.splice(i + 1, 1);
+			}
+			msg = msg.join('').split('|');
+			let ROArray: string[] = msg[msg.indexOf('Room Owners (#):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			let BotArray: string[] = msg[msg.indexOf('Bots (*):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			let ModArray: string[] = msg[msg.indexOf('Moderators (@):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			let DriverArray: string[] = msg[msg.indexOf('Drivers (%):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			let VoiceArray: string[] = msg[msg.indexOf('Voices (+):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			const messageArgs: IClientMessageTypes['popup'] = {
+				roomowners: ROArray,
+				mods: ModArray,
+				bots: BotArray,
+				drivers: DriverArray,
+				voices: VoiceArray,
+			};
+			let buf = `<h4>Room Owners (#)</h4>`;
+			buf += `<p>${messageArgs.roomowners.join(`, `)}</p>`;
+			buf += `<h4>Room Bots (*)</h4>`;
+			buf += `<p>${messageArgs.bots.join(`, `)}</p>`;
+			buf += `<h4>Room Mods (@)</h4>`;
+			buf += `<p>${messageArgs.mods.join(`, `)}</p>`;
+			buf += `<h4>Room Drivers (%)</h4>`;
+			buf += `<p>${messageArgs.drivers.join(`, `)}</p>`;
+			buf += `<h4>Room Voices (+)</h4>`;
+			buf += `<p>${messageArgs.voices.join(`, `)}</p>`;
+			(Rooms.get('tranquility') as Room).sayHtml(buf);
+			break;
+		}
+
 		case 'challstr': {
 			if (this.challstrTimeout) clearTimeout(this.challstrTimeout);
 
