@@ -192,10 +192,11 @@ export const commands: Dict<ICommandDefinition> = {
 	},
 };
 
+/*
 export class Module implements IPluginInterface {
 	schedule: string[] = ['natdexuu', 'natdexuu', 'natdex', 'natdex', 'natdex', 'natdexuu'];
 	name: string = "National Dex";
-	times: number[] = [2, 14, 15, 16, 17, 18];
+	times: number[] = [14, 15, 16, 17, 18];
 	last: number = 0;
 	official() {
 		const room = Rooms.get('nationaldex');
@@ -203,7 +204,7 @@ export class Module implements IPluginInterface {
 		if (!room) return;
 		const db = Storage.getDatabase(room);
 		if (!db.lastTour) {
-			db.lastTour = -1;
+			db.lastTour = 0;
 			Storage.exportDatabase(room.id);
 		}
 		if (this.last === -1) return;
@@ -239,3 +240,4 @@ export class Module implements IPluginInterface {
 		}
 	}
 }
+*/
