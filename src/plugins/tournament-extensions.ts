@@ -4,6 +4,8 @@ import { Room } from "../rooms";
 import { IClientMessageTypes, ITournamentMessageTypes } from "../types/client";
 import { ITournamentUpdateJson, ITournamentEndJson } from "../types/tournaments";
 
+const customRulesURL = `https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md`;
+
 export const commands: Dict<ICommandDefinition> = {
 	tourconfig: {
 		command(target, room, user) {
@@ -192,7 +194,7 @@ export const commands: Dict<ICommandDefinition> = {
 					autostart: 2,
 				};
 			}
-			const stylizedRulesArray: string[] = (rules: string[]) => {
+			const stylizedRulesArray: (k: string[]) => string[] = (rules: string[]) => {
 				const sortedRules: string[] = [];
 				for (const rule of rules) {
 					if (Dex.getFormat(rule)) {
@@ -269,11 +271,11 @@ export const commands: Dict<ICommandDefinition> = {
 			} else if (['addrule'].includes(arg0ID)) {
 				const addedRules = args.slice(1).join(' ').trim().split(',');
 				if (!addedRules.length) {
-					return this.say(`Please provide rules to add. Here is a list: https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md`);
+					return this.say(`Please provide rules to add. Here is a list: ${customRulesURL}`);
 				}
 				for (const rule of addedRules.map(r => r.trim())) {
 					if (!Dex.getFormat(rule)) {
-						return this.say(`Rule '${rule}' not found. [[Here is a list of rules <Here is a list: https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md>]]`);
+						return this.say(`Rule '${rule}' not found. [[Here is a list of rules <Here is a list: ${customRulesURL}>]]`);
 					}
 					if (db.tourRuleset.includes(`!${rule}`)) {
 						const ruleIndex = db.tourRuleset.indexOf(`!${rule}`);
@@ -293,11 +295,11 @@ export const commands: Dict<ICommandDefinition> = {
 			} else if (['delrule', 'removerule'].includes(arg0ID)) {
 				const removedRules = args.slice(1).join(' ').trim().split(',');
 				if (!removedRules.length) {
-					return this.say(`Please provide rules to add. Here is a list: https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md`);
+					return this.say(`Please provide rules to add. Here is a list: ${customRulesURL}`);
 				}
 				for (const rule of removedRules.map(r => r.trim())) {
 					if (!Dex.getFormat(rule)) {
-						return this.say(`Rule '${rule}' not found. [[Here is a list of rules <Here is a list: https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md>]]`);
+						return this.say(`Rule '${rule}' not found. [[Here is a list: <${customRulesURL}>]]`);
 					}
 					if (db.tourRuleset.includes(rule)) {
 						const ruleIndex = db.tourRuleset.indexOf(rule);
@@ -400,13 +402,12 @@ export const commands: Dict<ICommandDefinition> = {
 							if (slindex >= 0) split = slicedRule.split('++');
 							for (const sp of split.map(x => x.trim())) {
 								if (Tools.toId(sp) === 'metronome') {
-									return this.say(`Ambiguous ${rule.startsWith('-') ? '' : 'un'}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`);
+									const banPrefix = rule.startsWith('-') ? '' : 'un';
+									return this.say(
+										`Ambiguous ${banPrefix}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`
+									);
 								}
-								if (
-									!Dex.getSpecies(sp) &&
-									!Dex.getEffect(sp) &&
-									!Dex.getTag(sp)
-								) {
+								if (!Dex.getSpecies(sp) && !Dex.getEffect(sp) && !Dex.getTag(sp)) {
 									return this.say(`Invalid section of ${rule.startsWith('-') ? 'ban' : 'unban'} '${rule}': ${sp}`);
 								}
 							}
@@ -422,7 +423,10 @@ export const commands: Dict<ICommandDefinition> = {
 							}
 						} else {
 							if (Tools.toId(rule) === 'metronome') {
-								return this.say(`Ambiguous ${rule.startsWith('-') ? '' : 'un'}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`);
+								const banPrefix = rule.startsWith('-') ? '' : 'un';
+								return this.say(
+									`Ambiguous ${banPrefix}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`
+								);
 							}
 							if (
 								!Dex.getSpecies(rule) &&
@@ -521,14 +525,22 @@ export const commands: Dict<ICommandDefinition> = {
 				}
 				if (targets[2]) {
 					const t2Int = parseInt(targets[2]);
-					if (isNaN(t2Int)) return this.say(`Correct syntax: ${Config.commandCharacter}etour __[format]__, __["elimination" | "roundrobin"]__, __[player cap]__`);
+					if (isNaN(t2Int)) {
+						return this.say(
+							`Correct syntax: ${Config.commandCharacter}etour __[format]__, __["elimination" | "roundrobin"]__, __[player cap]__`
+						);
+					}
 					tourcmd += `, ${t2Int}`;
 				} else {
 					tourcmd += `,`;
 				}
 				if (targets[3]) {
 					const t3Int = parseInt(targets[3]);
-					if (isNaN(t3Int)) return this.say(`Correct syntax: ${Config.commandCharacter}etour __[format]__, __["elimination" | "roundrobin"]__, __[player cap]__, __[rounds]__`);
+					if (isNaN(t3Int)) {
+						return this.say(
+							`Correct syntax: ${Config.commandCharacter}etour __[format]__, __["elimination" | "roundrobin"]__, __[player cap]__, __[rounds]__`
+						);
+					}
 					tourcmd += `, ${t3Int}`;
 				} else {
 					tourcmd += `,`;
@@ -652,7 +664,9 @@ export class Module implements IPluginInterface {
 								const format = Dex.getFormat(database.queuedTournament.formatid, true);
 								if (format) {
 									queuedTournament = true;
-									if (!database.queuedTournament.time) database.queuedTournament.time = now + Tournaments.queuedTournamentTime;
+									if (!database.queuedTournament.time) {
+										database.queuedTournament.time = now + Tournaments.queuedTournamentTime;
+									}
 									Tournaments.setTournamentTimer(room, database.queuedTournament.time, format,
 										database.queuedTournament.playerCap, database.queuedTournament.scheduled);
 								} else {
