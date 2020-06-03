@@ -1,7 +1,7 @@
-import { IPluginInterface } from "../types/plugins";
-import { Room } from "../rooms";
-import { IClientMessageTypes } from "../types/client";
-import { ICommandDefinition } from "../command-parser";
+import type { IPluginInterface } from "../types/plugins";
+import type { Room } from "../rooms";
+import type { IClientMessageTypes } from "../types/client";
+import type { ICommandDefinition } from "../command-parser";
 
 export const commands: Dict<ICommandDefinition> = {
 	forceleaveroom: {
@@ -67,7 +67,8 @@ export class Module implements IPluginInterface {
 						const formatIdIndex = msgPart.includes('replay') ? 0 : 1;
 						const findBattle = msgPart.split('.com/')[1].split('-')[formatIdIndex];
 						const format = Dex.getFormat(findBattle);
-						if (format && user !== Users.self && (!user.hasRank(room, 'voice') || !['typhlosion08', 'tnunes'].includes(user.id))) {
+						if (format && user !== Users.self &&
+							(!user.hasRank(room, 'voice') || !['typhlosion08', 'tnunes'].includes(user.id))) {
 							if (!format.team && !format.id.includes('metronome')) {
 								room.say(`/forcehidetext ${user.id}, 1`);
 								room.say(`${user.name}: Please only post battle links related to random formats in here.`);

@@ -1,8 +1,9 @@
-import { ICommandDefinition } from "../command-parser";
-import { IPluginInterface } from "../types/plugins";
-import { Room } from "../rooms";
-import { IClientMessageTypes, ITournamentMessageTypes } from "../types/client";
-import { ITournamentUpdateJson, ITournamentEndJson } from "../types/tournaments";
+import type { ICommandDefinition } from "../command-parser";
+import type { IPluginInterface } from "../types/plugins";
+import type { Room } from "../rooms";
+import type { IClientMessageTypes, ITournamentMessageTypes } from "../types/client";
+import type { ITournamentUpdateJson, ITournamentEndJson } from "../types/tournaments";
+import { commandCharacter } from "../config";
 
 const customRulesURL = `https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md`;
 
@@ -12,11 +13,11 @@ export const commands: Dict<ICommandDefinition> = {
 			if (this.isPm(room)) return;
 			if (!user.canPerform(room, 'moderator')) return;
 			if (!Users.self.canPerform(room, 'bot')) return;
-			if (!target) return this.say(`${Config.commandCharacter}econfig autostart/autodq`);
+			if (!target) return this.say(`${commandCharacter}econfig autostart/autodq`);
 			target = target.trim();
 			const args = target.split(' ');
 			if (!args[1]) {
-				return this.say(`Correct syntax: ${Config.commandCharacter}econfig autostart __[number/"off"]__`);
+				return this.say(`Correct syntax: ${commandCharacter}econfig autostart __[number/"off"]__`);
 			}
 			const arg1ID = Tools.toId(args[1]);
 			const arg1Int = Number(arg1ID);
@@ -25,7 +26,7 @@ export const commands: Dict<ICommandDefinition> = {
 				!args[2] ||
 				!['randoms', 'normal'].includes(Tools.toId(args[1]))
 			) {
-				return this.say(`Correct syntax: ${Config.commandCharacter}econfig autodq randoms/normal __[number | "off"]__`);
+				return this.say(`Correct syntax: ${commandCharacter}econfig autodq randoms/normal __[number | "off"]__`);
 			}
 			const arg2ID = Tools.toId(args[2]);
 			const arg2Int = Number(arg2ID);
@@ -92,7 +93,7 @@ export const commands: Dict<ICommandDefinition> = {
 				Storage.exportDatabase(room.id);
 				return this.say(`Autostart successfully set to ${arg1Int}.`);
 			default:
-		return this.say(`Correct syntax: ${Config.commandCharacter}econfig autostart/autodq`);
+		return this.say(`Correct syntax: ${commandCharacter}econfig autostart/autodq`);
 			}
 		},
 		aliases: ['econfig'],
@@ -102,7 +103,7 @@ export const commands: Dict<ICommandDefinition> = {
 			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
 			if (!user.canPerform(room, 'driver')) return;
 			if (!Users.self.canPerform(room, 'bot')) return;
-			if (!target) return this.say(`Correct syntax: ${Config.commandCharacter}host __[user]__`);
+			if (!target) return this.say(`Correct syntax: ${commandCharacter}host __[user]__`);
 			target = target.trim();
 			if (!Storage.databases[room.id].hosts) {
 				Storage.databases[room.id].hosts = [];
@@ -124,7 +125,7 @@ export const commands: Dict<ICommandDefinition> = {
 			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
 			if (!user.canPerform(room, 'driver')) return;
 			if (!Users.self.canPerform(room, 'bot')) return;
-			if (!target) return this.say(`Correct syntax: ${Config.commandCharacter}dehost __[user]__`);
+			if (!target) return this.say(`Correct syntax: ${commandCharacter}dehost __[user]__`);
 			target = target.trim();
 			const db = Storage.getDatabase(room).hosts;
 			if (!db) return this.say(`There are no hosts.`);
@@ -235,7 +236,7 @@ export const commands: Dict<ICommandDefinition> = {
 				return;
 			} else if (['name', 'setname'].includes(arg0ID)) {
 				const name = args.slice(1).join(' ').trim();
-				if (!name) return this.say(`Correct syntax: ${Config.commandCharacter}etour name __[name]__`);
+				if (!name) return this.say(`Correct syntax: ${commandCharacter}etour name __[name]__`);
 				this.say(`/modnote TOUR: renamed by ${user.id}`);
 				this.say(`/tour name ${name}`);
 				return;
@@ -244,7 +245,7 @@ export const commands: Dict<ICommandDefinition> = {
 				this.say(`/tour clearname`);
 				return;
 			} else if (['autostart', 'setautostart', 'as'].includes(arg0ID)) {
-				if (!args[1]) return this.say(`Correct syntax: ${Config.commandCharacter}etour autostart __[number | "off"]__`);
+				if (!args[1]) return this.say(`Correct syntax: ${commandCharacter}etour autostart __[number | "off"]__`);
 				const autostartTimer = parseInt(args[1]);
 				if (Tools.toId(args[1]) !== 'off' && isNaN(autostartTimer)) return this.say(`${args[1]} is not a number.`);
 				if (Tools.toId(args[1]) === 'off' || autostartTimer === 0) return this.say(`/tour autostart off`);
@@ -253,7 +254,7 @@ export const commands: Dict<ICommandDefinition> = {
 				return;
 			} else if (['autodq', 'setautodq', 'adq', 'runautodq'].includes(arg0ID)) {
 				if (arg0ID === 'runautodq') return this.say(`/tour runautodq`);
-				if (!args[1]) return this.say(`Correct syntax: ${Config.commandCharacter}etour autodq __[number | "off"]__`);
+				if (!args[1]) return this.say(`Correct syntax: ${commandCharacter}etour autodq __[number | "off"]__`);
 				const autodqTimer = parseInt(args[1]);
 				if (Tools.toId(args[1]) !== 'off' && isNaN(autodqTimer)) return this.say(`${args[1]} is not a number.`);
 				if (Tools.toId(args[1]) === 'off' || autodqTimer === 0) return this.say(`/tour autodq off`);
@@ -403,9 +404,7 @@ export const commands: Dict<ICommandDefinition> = {
 							for (const sp of split.map(x => x.trim())) {
 								if (Tools.toId(sp) === 'metronome') {
 									const banPrefix = rule.startsWith('-') ? '' : 'un';
-									return this.say(
-										`Ambiguous ${banPrefix}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`
-									);
+									return this.say(`Ambiguous ${banPrefix}ban 'metronome'; preface it with 'move:' or 'item:'.`);
 								}
 								if (!Dex.getSpecies(sp) && !Dex.getEffect(sp) && !Dex.getTag(sp)) {
 									return this.say(`Invalid section of ${rule.startsWith('-') ? 'ban' : 'unban'} '${rule}': ${sp}`);
@@ -424,9 +423,7 @@ export const commands: Dict<ICommandDefinition> = {
 						} else {
 							if (Tools.toId(rule) === 'metronome') {
 								const banPrefix = rule.startsWith('-') ? '' : 'un';
-								return this.say(
-									`Ambiguous ${banPrefix}ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`
-								);
+								return this.say(`Ambiguous ${banPrefix}ban 'metronome'; preface it with 'move:' or 'item:'.`);
 							}
 							if (
 								!Dex.getSpecies(rule) &&
@@ -474,14 +471,14 @@ export const commands: Dict<ICommandDefinition> = {
 				return;
 			} else if (['timer', 'forcetimer'].includes(arg0ID)) {
 				if (!args[1] || !['on', 'off'].includes(Tools.toId(args[1]))) {
-					return this.say(`Correct syntax: ${Config.commandCharacter}etour timer __["on" | "off"]__`);
+					return this.say(`Correct syntax: ${commandCharacter}etour timer __["on" | "off"]__`);
 				}
 				this.say(`/modnote TOUR: Forcetimer toggled by ${user.id}`);
 				this.say(`/tour forcetimer ${Tools.toId(args[1])}`);
 				return;
 			} else if (['scout', 'scouting'].includes(arg0ID)) {
 				if (!args[1] || !['on', 'off'].includes(Tools.toId(args[1]))) {
-					return this.say(`Correct syntax: ${Config.commandCharacter}etour scouting __["on" | "off"]__`);
+					return this.say(`Correct syntax: ${commandCharacter}etour scouting __["on" | "off"]__`);
 				}
 				this.say(`/modnote TOUR: Scouting toggled by ${user.id}`);
 				if (Tools.toId(args[1]) === 'on') {
@@ -492,7 +489,7 @@ export const commands: Dict<ICommandDefinition> = {
 				return;
 			} else if (['modjoin'].includes(arg0ID)) {
 				if (!args[1] || !['on', 'off'].includes(Tools.toId(args[1]))) {
-					return this.say(`Correct syntax: ${Config.commandCharacter}etour scouting __["on" | "off"]__`);
+					return this.say(`Correct syntax: ${commandCharacter}etour scouting __["on" | "off"]__`);
 				}
 				this.say(`/modnote TOUR: Modjoin toggled by ${user.id}`);
 				if (Tools.toId(args[1]) === 'on') {
@@ -503,7 +500,9 @@ export const commands: Dict<ICommandDefinition> = {
 				return;
 			} else if (['cap', 'playercap'].includes(arg0ID)) {
 				const arg1Int = parseInt(args[1]);
-				if (!args[1] || isNaN(arg1Int)) return this.say(`Correct syntax: ${Config.commandCharacter}etour playercap __[number]__`);
+				if (!args[1] || isNaN(arg1Int)) {
+					return this.say(`Correct syntax: ${commandCharacter}etour playercap __[number]__`);
+				}
 				this.say(`/modnote TOUR: Player cap set to ${arg1Int} by ${user.id}`);
 				this.say(`/tour cap ${arg1Int}`);
 				return;
@@ -526,9 +525,8 @@ export const commands: Dict<ICommandDefinition> = {
 				if (targets[2]) {
 					const t2Int = parseInt(targets[2]);
 					if (isNaN(t2Int)) {
-						return this.say(
-							`Correct syntax: ${Config.commandCharacter}etour __[format]__, __["elimination" | "roundrobin"]__, __[player cap]__`
-						);
+						const cmdFormat = `__[format]__, __["elimination" | "roundrobin"]__, __[player cap]__`;
+						return this.say(`Correct syntax: ${commandCharacter}etour ${cmdFormat}`);
 					}
 					tourcmd += `, ${t2Int}`;
 				} else {
@@ -537,9 +535,8 @@ export const commands: Dict<ICommandDefinition> = {
 				if (targets[3]) {
 					const t3Int = parseInt(targets[3]);
 					if (isNaN(t3Int)) {
-						return this.say(
-							`Correct syntax: ${Config.commandCharacter}etour __[format]__, __["elimination" | "roundrobin"]__, __[player cap]__, __[rounds]__`
-						);
+						const cmdFormat = `__[format]__, __["elimination" | "roundrobin"]__, __[player cap]__, __[rounds]__`;
+						return this.say(`Correct syntax: ${commandCharacter}etour ${cmdFormat}`);
 					}
 					tourcmd += `, ${t3Int}`;
 				} else {

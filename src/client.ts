@@ -602,21 +602,26 @@ export class Client {
 		 */
 		case 'popup': {
 			let msg = message.split('');
-			for (let [i, m] of msg.entries()) {
+			for (const [i, m] of msg.entries()) {
 				if (m === '|' && msg[i + 1] === '|') msg.splice(i + 1, 1);
 			}
 			msg = msg.join('').split('|');
-			let ROArray: string[] = msg[msg.indexOf('Room Owners (#):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
-			let BotArray: string[] = msg[msg.indexOf('Bots (*):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
-			let ModArray: string[] = msg[msg.indexOf('Moderators (@):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
-			let DriverArray: string[] = msg[msg.indexOf('Drivers (%):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
-			let VoiceArray: string[] = msg[msg.indexOf('Voices (+):') + 1].split(',').map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			const roArray: string[] = msg[msg.indexOf('Room Owners (#):') + 1].split(',')
+				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			const botArray: string[] = msg[msg.indexOf('Bots (*):') + 1].split(',')
+				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			const modArray: string[] = msg[msg.indexOf('Moderators (@):') + 1].split(',')
+				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			const driverArray: string[] = msg[msg.indexOf('Drivers (%):') + 1].split(',')
+				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			const voiceArray: string[] = msg[msg.indexOf('Voices (+):') + 1].split(',')
+				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
 			const messageArgs: IClientMessageTypes['popup'] = {
-				roomowners: ROArray,
-				mods: ModArray,
-				bots: BotArray,
-				drivers: DriverArray,
-				voices: VoiceArray,
+				roomowners: roArray,
+				mods: modArray,
+				bots: botArray,
+				drivers: driverArray,
+				voices: voiceArray,
 			};
 			let buf = `<h4>Room Owners (#)</h4>`;
 			buf += `<p>${messageArgs.roomowners.join(`, `)}</p>`;
