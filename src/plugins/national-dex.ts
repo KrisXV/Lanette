@@ -1,48 +1,17 @@
-import { IPluginInterface } from "../types/plugins";
-import { ICommandDefinition } from "../command-parser";
+import type { ICommandDefinition } from "../command-parser";
 import { commandCharacter } from "../config";
-
-const stylizedRulesArray = (rules: string[]) => {
-	const sortedRules: string[] = [];
-	for (const rule of rules) {
-		if (Dex.getFormat(rule)) {
-			const format = Dex.getExistingFormat(rule);
-			const charAt0 = rule.charAt(0);
-			sortedRules.push(`${charAt0 === '-' ? '-' : ''}${format.name}`);
-		}
-		if (Dex.getTag(rule)) {
-			const tag = Dex.getTag(rule)!;
-			const charAt0 = rule.charAt(0);
-			sortedRules.push(`${charAt0 === '+' ? '+' : '-'}${tag}`);
-		}
-		if (Dex.getSpecies(rule)) {
-			const species = Dex.getExistingPokemon(rule);
-			const charAt0 = rule.charAt(0);
-			sortedRules.push(`${charAt0 === '+' ? '+' : '-'}${species.name}`);
-		}
-		if (Dex.getEffect(rule)) {
-			const effect = Dex.getEffect(rule)!;
-			let isAmbiguous = '';
-			if (rule.toLowerCase().slice(1).startsWith('move:')) isAmbiguous = 'move: ';
-			if (rule.toLowerCase().slice(1).startsWith('item:')) isAmbiguous = 'item: ';
-			if (rule.toLowerCase().slice(1).startsWith('ability:')) isAmbiguous = 'ability: ';
-			const charAt0 = rule.charAt(0);
-			sortedRules.push(`${charAt0 === '+' ? '+' : '-'}${isAmbiguous}${effect.name}`);
-		}
-	}
-	return sortedRules.sort();
-};
 
 export const commands: Dict<ICommandDefinition> = {
 	nationaldexuu: {
 		command(target, room, user) {
 			if (this.isPm(room) || room.id !== 'nationaldex' || !user.canPerform(room, 'driver')) return;
+			const syntax = `ban/unban/addrule/remrule -ban, +unban, added rule, !removed rule`;
 			if (!target) {
-				return this.say(`/pm ${user.id}, Correct syntax: \`\`${commandCharacter}nduu ban/unban/addrule/remrule -ban, +unban, added rule, !removed rule\`\``);
+				return this.say(`/pm ${user.id}, Correct syntax: \`\`${commandCharacter}nduu ${syntax}\`\``);
 			}
 			const args = target.split(` `);
 			if (!args[0] || !['ban', 'unban', 'addrule', 'remrule', 'clearbans', 'viewbans'].includes(Tools.toId(args[0]))) {
-				return this.say(`/pm ${user.id}, Correct syntax: \`\`${commandCharacter}nduu ban/unban/addrule/remrule -ban, +unban, added rule, !removed rule\`\``);
+				return this.say(`/pm ${user.id}, Correct syntax: \`\`${commandCharacter}nduu ${syntax}\`\``);
 			}
 			const db = Storage.getDatabase(room);
 			if (!db.nationalDexUUBL) {
@@ -61,7 +30,7 @@ export const commands: Dict<ICommandDefinition> = {
 					if (x.endsWith('base')) x = x.replace('base', '');
 					if (Dex.getSpecies(x)) x = `<psicon pokemon="${Dex.getSpecies(x)!.id}" />`;
 					if (Dex.getItem(x)) x = `<psicon item="${Dex.getItem(x)!.name}" />`;
-					if (Dex.getTag(x)) x = `${Dex.getTag(x)}`;
+					if (Dex.getTag(x)) x = `${Dex.getTag(x)!}`;
 					if (Dex.getFormat(x)) x = `${Dex.getFormat(x)!.name}`;
 					if (Dex.getEffect(x) && !Dex.getItem(x)) x = `${Dex.getEffect(x)!.name}`;
 					return x;

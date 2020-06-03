@@ -1,7 +1,7 @@
-import { ICommandDefinition } from "../command-parser";
-import { Room } from "../rooms";
+import type { ICommandDefinition } from "../command-parser";
+import type { Room } from "../rooms";
 
-export const commands:Dict<ICommandDefinition> = {
+export const commands: Dict<ICommandDefinition> = {
 	emojiwhitelist: {
 		command(target, room, user) {
 			const args = target.split(' ');
@@ -9,7 +9,9 @@ export const commands:Dict<ICommandDefinition> = {
 			if (!args[0] || !['add', 'remove', 'roomadd', 'roomremove'].includes(Tools.toId(args[0]))) return;
 			if (!userTarget || Tools.toId(userTarget).length > 18) return;
 			if (['roomadd', 'roomremove'].includes(Tools.toId(args[0]))) {
-				if (this.isPm(room) || !user.canPerform(room, 'roomowner')) return this.say(`/pm ${user.id}, You can't perform that command.`);
+				if (this.isPm(room) || !user.canPerform(room, 'roomowner')) {
+					return this.say(`/pm ${user.id}, You can't perform that command.`);
+				}
 				if (!Storage.getDatabase(room).emojiWhitelist) {
 					Storage.getDatabase(room).emojiWhitelist = [];
 					Storage.exportDatabase(room.id);
@@ -68,7 +70,11 @@ export const commands:Dict<ICommandDefinition> = {
 				if (Tools.toId(usedEmoji) in emojiDatabase) {
 					usedEmoji = emojiDatabase[Tools.toId(usedEmoji)];
 				}
-				this.sayUhtml(`${Tools.toId(usedEmoji)}`, `<img src="${usedEmoji.trim()}" alt="${usedEmoji}" width="20" height="20" />`, Rooms.get('ruinsofalph') as Room);
+				this.sayUhtml(
+					`${Tools.toId(usedEmoji)}`,
+					`<img src="${usedEmoji.trim()}" alt="${usedEmoji}" width="20" height="20" />`,
+					Rooms.get('ruinsofalph') as Room
+				);
 			} else {
 				if (!Users.self.canPerform(room, 'bot')) return;
 				if (globalDB.privateRooms && globalDB.privateRooms.includes(room.id)) {
@@ -77,7 +83,11 @@ export const commands:Dict<ICommandDefinition> = {
 					if (Tools.toId(usedEmoji) in emojiDatabase) {
 						usedEmoji = emojiDatabase[Tools.toId(usedEmoji)];
 					}
-					this.sayUhtml(`${Tools.toId(usedEmoji)}`, `<img src="${usedEmoji.trim()}" alt="${usedEmoji}" width="20" height="20" />`, Rooms.get('ruinsofalph') as Room);
+					this.sayUhtml(
+						`${Tools.toId(usedEmoji)}`,
+						`<img src="${usedEmoji.trim()}" alt="${usedEmoji}" width="20" height="20" />`,
+						Rooms.get('ruinsofalph') as Room
+					);
 					return;
 				}
 				if (!user.canPerform(room, 'roomowner') && !user.isEmojiWhitelisted(room)) {
@@ -88,7 +98,11 @@ export const commands:Dict<ICommandDefinition> = {
 				if (Tools.toId(usedEmoji) in emojiDatabase) {
 					usedEmoji = emojiDatabase[Tools.toId(usedEmoji)];
 				}
-				this.sayUhtml(`${Tools.toId(usedEmoji)}`, `<img src="${usedEmoji.trim()}" alt="${usedEmoji}" width="20" height="20" />`, Rooms.get('ruinsofalph') as Room);
+				this.sayUhtml(
+					`${Tools.toId(usedEmoji)}`,
+					`<img src="${usedEmoji.trim()}" alt="${usedEmoji}" width="20" height="20" />`,
+					Rooms.get('ruinsofalph') as Room
+				);
 			}
 		},
 		aliases: ['e'],
@@ -96,7 +110,13 @@ export const commands:Dict<ICommandDefinition> = {
 	lips: {
 		command(target, room, user) {
 			if (!user.canPerform(Rooms.get('staff') as Room, 'roomowner')) return;
-			this.sayUhtml('lips for kris', `<img src="https://discordapp.com/assets/52854da3ce48e284c9a7cd67532fd313.svg" alt="eye" width="20" height="20" /><img src="https://discordapp.com/assets/c1aac731a5d5bab09fc7d177fadc5eef.svg" alt="lips" width="20" height="20" /><img src="https://discordapp.com/assets/52854da3ce48e284c9a7cd67532fd313.svg" alt="eye" width="20" height="20" />`, Rooms.get('ruinsofalph') as Room);
+			this.sayUhtml(
+				'lips for kris',
+				`<img src="https://discordapp.com/assets/52854da3ce48e284c9a7cd67532fd313.svg" alt="eye" width="20" height="20" />` +
+				`<img src="https://discordapp.com/assets/c1aac731a5d5bab09fc7d177fadc5eef.svg" alt="lips" width="20" height="20" />` +
+				`<img src="https://discordapp.com/assets/52854da3ce48e284c9a7cd67532fd313.svg" alt="eye" width="20" height="20" />`,
+				Rooms.get('ruinsofalph') as Room
+			);
 		},
 	},
 	emojislist: {
@@ -110,8 +130,11 @@ export const commands:Dict<ICommandDefinition> = {
 				pmRoom = room;
 			}
 			const ewl = Storage.getGlobalDatabase().emojis;
-			if (!ewl || !Object.keys(ewl).length) return this.say(`${canPerformInRoom ? `` : `/pm ${user.id}, `}There are currently no emojis saved.`);
-			let buf = `<div class="infobox infobox-limited"><details><summary>Emojis</summary><ul style="list-style-type:none;margin-left:0;padding-left:0;">`;
+			if (!ewl || !Object.keys(ewl).length) {
+				return this.say(`${canPerformInRoom ? `` : `/pm ${user.id}, `}There are currently no emojis saved.`);
+			}
+			let buf = `<div class="infobox infobox-limited"><details><summary>Emojis</summary>`;
+			buf += `<ul style="list-style-type:none;margin-left:0;padding-left:0;">`;
 			for (const emoji in Object.fromEntries(Object.entries(ewl).sort())) {
 				if (!ewl[emoji].startsWith('http')) continue;
 				buf += `<li><img src="${ewl[emoji].trim()}" alt="${ewl[emoji]}" width="20" height="20" /> <code>${emoji}</code></li>`;
@@ -119,7 +142,11 @@ export const commands:Dict<ICommandDefinition> = {
 			buf += `</ul></details>`;
 			buf += `<br /><p>`;
 			const privateRooms = Storage.getGlobalDatabase().privateRooms || [];
-			if (!privateRooms.includes(room.id)) buf += `To use these, you need to be Room Owner (#) or higher in the room it is used in or otherwise whitelisted by the Room Owners. Room Owners can whitelist users in their room with <code>@ewl roomadd/roomremove [userid]</code>. `;
+			if (!privateRooms.includes(room.id)) {
+				buf += `To use these, you need to be Room Owner (#) or higher in the room it is used`;
+				buf += `in or otherwise whitelisted by the Room Owners.`;
+				buf += `Room Owners can whitelist users in their room with <code>@ewl roomadd/roomremove [userid]</code>. `;
+			}
 			buf += `The command to use these in chat is <code>@e [emoji name]</code>.</p>`;
 			buf += `</div>`;
 			if (canPerformInRoom) {

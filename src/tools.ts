@@ -885,12 +885,14 @@ export class Tools {
 				try {
 					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 					const pageData = JSON.parse(data);
-					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
 					key = pageData.key;
 				} catch (e) {
 					if (/^[^<]*<!DOCTYPE html>/.test(data)) {
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
 						return callback('Cloudflare-related error uploading to Hastebin: ' + e.message);
 					} else {
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
 						return callback('Unknown error uploading to Hastebin: ' + e.message);
 					}
 				}

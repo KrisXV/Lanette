@@ -1,4 +1,4 @@
-import { ICommandDefinition } from "../command-parser";
+import type { ICommandDefinition } from "../command-parser";
 
 export const commands: Dict<ICommandDefinition> = {
 	addprivateroom: {
