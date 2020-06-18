@@ -56,8 +56,7 @@ export class Module implements IPluginInterface {
 				if (room.id === 'ruinsofalph') {
 					if (messageArguments.message.includes('play.pokemonshowdown.com') && messageArguments.message.includes('gen8')) {
 						if (user !== Users.self) {
-							room.say(`/warn ${user.id}, Automated response: Please only post replays for gens 1-7 here.`);
-							room.say(`/forcehidetext ${user.id}, 1`);
+							room.say(`/forcehidelines ${user.id}, 1, Automated response: Please only post replays for gens 1-7 here.`);
 						}
 					}
 				}
@@ -68,10 +67,9 @@ export class Module implements IPluginInterface {
 						const findBattle = msgPart.split('.com/')[1].split('-')[formatIdIndex];
 						const format = Dex.getFormat(findBattle);
 						if (format && user !== Users.self &&
-							(!user.hasRank(room, 'voice') || !['typhlosion08', 'tnunes'].includes(user.id))) {
+							(!user.hasRank(room, 'voice') && !['typhlosion08', 'tnunes'].includes(user.id))) {
 							if (!format.team && !format.id.includes('metronome')) {
-								room.say(`/forcehidetext ${user.id}, 1`);
-								room.say(`${user.name}: Please only post battle links related to random formats in here.`);
+								room.say(`/forcehidelines  ${user.id}, 1, Please only post battle links related to random formats in here.`);
 							}
 						}
 					}

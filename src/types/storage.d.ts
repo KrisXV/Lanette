@@ -98,6 +98,18 @@ export interface IDatabase {
 	emojiWhitelist?: string[];
 	lastTour?: number;
 	nationalDexUUBL?: string[];
+	enableScrappieLeaderboards?: boolean;
+	scrappieLeaderboardSettings?: {
+		tierFilter: string | string[] | RegExp | Object | null;
+		onlyOfficial: boolean;
+		winnerPoints: number;
+		finalistPoints: number;
+		semiFinalistPoints: number;
+		battlePoints: number;
+	};
+	scrappieLadder?: Dict<[string, number, number, number, number, number]>;
+	resetCodes?: Dict<string>;
+	nextTournamentOfficial?: boolean;
 }
 
 interface IOfflineMessage {
