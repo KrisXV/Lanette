@@ -606,15 +606,14 @@ export class Module implements IPluginInterface {
 
 						if (Users.self.hasRank(room, 'bot')) {
 							const tourcfg = Storage.getDatabase(room).tourcfg;
-							if (!tourcfg) break;
-							if (tourcfg.autodq) {
+							if (tourcfg && tourcfg.autodq) {
 								let used = tourcfg.autodq.normal;
 								if (format.team) used = tourcfg.autodq.randoms;
 								if (!['off', 0].includes(used)) {
 									room.say(`/tour autodq ${used}`);
 								}
 							}
-							if (tourcfg.autostart) {
+							if (tourcfg && tourcfg.autostart) {
 								const used = tourcfg.autostart;
 								if (!['off', 0].includes(used)) {
 									room.say(`/tour autostart ${used}`);
