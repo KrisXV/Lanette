@@ -1,6 +1,6 @@
-import type { ICommandDefinition } from "../command-parser";
+import type { ICommandDefinition, Command } from "../command-parser";
 
-export const commands: Dict<ICommandDefinition> = {
+export const commands: Dict<ICommandDefinition<Command, any>> = {
 	addprivateroom: {
 		command(target, room, user) {
 			if (this.isPm(room)) return;

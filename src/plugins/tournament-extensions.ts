@@ -1,4 +1,4 @@
-import type { ICommandDefinition } from "../command-parser";
+import type { ICommandDefinition, Command } from "../command-parser";
 import type { IPluginInterface } from "../types/plugins";
 import type { Room } from "../rooms";
 import type { IClientMessageTypes, ITournamentMessageTypes } from "../types/client";
@@ -7,7 +7,7 @@ import { commandCharacter } from "../config";
 
 const customRulesURL = `https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md`;
 
-export const commands: Dict<ICommandDefinition> = {
+export const commands: Dict<ICommandDefinition<Command, any>> = {
 	tourconfig: {
 		command(target, room, user) {
 			if (this.isPm(room)) return;
@@ -574,6 +574,7 @@ export class Module implements IPluginInterface {
 	parseMessage(room: Room, messageType: keyof IClientMessageTypes, messageParts: string[]): true | undefined {
 		switch (messageType) {
 			case 'tournament': {
+				if (!Config.allowTournaments || !Config.allowTournaments.includes(room.id)) return;
 				const type = messageParts[0] as keyof ITournamentMessageTypes;
 				messageParts.shift();
 				switch (type) {
@@ -584,28 +585,30 @@ export class Module implements IPluginInterface {
 							playerCap: parseInt(messageParts[2]),
 						};
 						const format = msgArguments.format;
+						const database = Storage.getDatabase(room);
+						const globalDB = Storage.getGlobalDatabase();
 						if (!format.id.startsWith('gen8')) {
-							if (room.id !== 'ruinsofalph') {
-								if (room.id !== 'bof') {
+							if (globalDB.privateRooms && !globalDB.privateRooms.includes(room.id)) {
+								if (room.id !== 'ruinsofalph') {
 									if (room.id === 'oldshark') {
 										// (Rooms.get('ruinsofalph') as Room).say(`[Gen ${Tools.toId(messageParts[0])[3]}] (Pure) Hackmons in <<${room.id}>>`);
 									} else {
 										(Rooms.get('ruinsofalph') as Room).say(`${format.name} in <<${room.id}>>`);
 									}
-								}
-							} else {
-								if (format.team) {
-									(Rooms.get('randombattles') as Room).say(`${format.name} in <<ruinsofalph>>`);
+								} else {
+									if (format.team) {
+										(Rooms.get('randombattles') as Room).say(`${format.name} in <<ruinsofalph>>`);
+									}
 								}
 							}
 						}
-						if (Storage.getDatabase(room).tourRuleset) {
-							Storage.getDatabase(room).tourRuleset = [];
+						if (database.tourRuleset) {
+							database.tourRuleset = [];
 							Storage.exportDatabase(room.id);
 						}
 
 						if (Users.self.hasRank(room, 'bot')) {
-							const tourcfg = Storage.getDatabase(room).tourcfg;
+							const tourcfg = database.tourcfg;
 							if (tourcfg && tourcfg.autodq) {
 								let used = tourcfg.autodq.normal;
 								if (format.team) used = tourcfg.autodq.randoms;
