@@ -1,9 +1,9 @@
 import type { IPluginInterface } from "../types/plugins";
 import type { Room } from "../rooms";
 import type { IClientMessageTypes } from "../types/client";
-import type { ICommandDefinition } from "../command-parser";
+import type { ICommandDefinition, Command } from "../command-parser";
 
-export const commands: Dict<ICommandDefinition> = {
+export const commands: Dict<ICommandDefinition<Command, any>> = {
 	forceleaveroom: {
 		command(target, room, user) {
 			/* if (this.isPm(room)) {

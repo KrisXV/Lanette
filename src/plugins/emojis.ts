@@ -1,7 +1,7 @@
-import type { ICommandDefinition } from "../command-parser";
+import type { ICommandDefinition, Command } from "../command-parser";
 import type { Room } from "../rooms";
 
-export const commands: Dict<ICommandDefinition> = {
+export const commands: Dict<ICommandDefinition<Command, any>> = {
 	emojiwhitelist: {
 		command(target, room, user) {
 			const args = target.split(' ');
