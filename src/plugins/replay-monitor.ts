@@ -69,7 +69,9 @@ export class Module implements IPluginInterface {
 						if (format && user !== Users.self &&
 							(!user.hasRank(room, 'voice') && !['typhlosion08', 'tnunes'].includes(user.id))) {
 							if (!format.team && !format.id.includes('metronome')) {
-								room.say(`/forcehidelines  ${user.id}, 1, Please only post battle links related to random formats in here.`);
+								room.say(
+									`/forcehidelines  ${user.id}, 1, Please only post battle links related to random formats in here.`
+								);
 							}
 						}
 					}
