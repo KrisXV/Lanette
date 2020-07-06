@@ -16,18 +16,8 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 			if (!target) return this.say(`${commandCharacter}econfig autostart/autodq`);
 			target = target.trim();
 			const args = target.split(' ');
-			if (!args[1]) {
-				return this.say(`Correct syntax: ${commandCharacter}econfig autostart __[number/"off"]__`);
-			}
 			const arg1ID = Tools.toId(args[1]);
 			const arg1Int = Number(arg1ID);
-			if (
-				!args[1] ||
-				!args[2] ||
-				!['randoms', 'normal'].includes(Tools.toId(args[1]))
-			) {
-				return this.say(`Correct syntax: ${commandCharacter}econfig autodq randoms/normal __[number | "off"]__`);
-			}
 			const arg2ID = Tools.toId(args[2]);
 			const arg2Int = Number(arg2ID);
 			if (!Storage.getDatabase(room).tourcfg) {
@@ -56,6 +46,9 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 			case 'autodq':
 			case 'setautodq':
 			case 'adq':
+				if (!args[1]) {
+					return this.say(`Correct syntax: ${commandCharacter}econfig autodq randoms/normal __[number | off]__`);
+				}
 				if (Tools.toId(args[1]) === 'randoms') {
 					if (arg2ID !== 'off' && isNaN(arg2Int)) {
 						return this.say(`${args[2]} must either be an integer or "off".`);
@@ -83,6 +76,9 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 			case 'autostart':
 			case 'setautostart':
 			case 'as':
+				if (!args[1]) {
+					return this.say(`Correct syntax: ${commandCharacter}econfig autostart __[number | off]__`);
+				}
 				if (arg1ID !== 'off' && isNaN(arg1Int)) return this.say(`${args[2]} must either be a number or "off".`);
 				if (arg1ID === 'off' || arg1Int === 0) {
 					db!.autostart = "off";
@@ -93,7 +89,7 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 				Storage.exportDatabase(room.id);
 				return this.say(`Autostart successfully set to ${arg1Int}.`);
 			default:
-		return this.say(`Correct syntax: ${commandCharacter}econfig autostart/autodq`);
+				return this.say(`Correct syntax: ${commandCharacter}econfig autostart/autodq`);
 			}
 		},
 		aliases: ['econfig'],
