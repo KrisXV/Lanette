@@ -1,9 +1,12 @@
 import type { IPluginInterface } from "../types/plugins";
 import type { Room } from "../rooms";
 import type { IClientMessageTypes } from "../types/client";
-import type { ICommandDefinition, Command } from "../command-parser";
+import type { CommandDefinitions } from "../types/command-parser";
+import type { CommandContext } from "../command-parser";
 
-export const commands: Dict<ICommandDefinition<Command, any>> = {
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
+
+export const commands: CommandDefinitions<CommandContext> = {
 	forceleaveroom: {
 		command(target, room, user) {
 			/* if (this.isPm(room)) {
@@ -31,6 +34,8 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 		},
 	},
 };
+
+/* eslint-enable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
 
 export class Module implements IPluginInterface {
 	name: string = "Replay Monitor";

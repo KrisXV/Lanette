@@ -1,7 +1,10 @@
-import type { ICommandDefinition, Command } from "../command-parser";
+import type { CommandDefinitions } from "../types/command-parser";
+import type { CommandContext } from "../command-parser";
 import type { Room } from "../rooms";
 
-export const commands: Dict<ICommandDefinition<Command, any>> = {
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
+
+export const commands: CommandDefinitions<CommandContext> = {
 	emojiwhitelist: {
 		command(target, room, user) {
 			const args = target.split(' ');
@@ -158,3 +161,5 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 		aliases: ['elist', 'emojilist'],
 	},
 };
+
+/* eslint-enable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/

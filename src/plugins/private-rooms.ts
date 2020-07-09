@@ -1,6 +1,9 @@
-import type { ICommandDefinition, Command } from "../command-parser";
+import type { CommandDefinitions } from "../types/command-parser";
+import type { CommandContext } from "../command-parser";
 
-export const commands: Dict<ICommandDefinition<Command, any>> = {
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
+
+export const commands: CommandDefinitions<CommandContext> = {
 	addprivateroom: {
 		command(target, room, user) {
 			if (this.isPm(room)) return;
@@ -36,3 +39,5 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 		developerOnly: true,
 	},
 };
+
+/* eslint-enable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
