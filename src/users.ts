@@ -133,7 +133,7 @@ export class User {
 
 	isHost(room: Room): boolean {
 		const hosts = Storage.getDatabase(room).hosts;
-		if (hosts) return hosts.includes(this.id);
+		if (hosts) return hosts.map(Tools.toId).includes(this.id);
 		return false;
 	}
 
