@@ -100,19 +100,31 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 			if (!user.canPerform(room, 'driver')) return;
 			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`Correct syntax: ${commandCharacter}host __[user]__`);
-			target = target.trim();
+			const args = target.trim().split(',');
 			if (!Storage.databases[room.id].hosts) {
 				Storage.databases[room.id].hosts = [];
 				Storage.exportDatabase(room.id);
 			}
-			const db = Storage.getDatabase(room).hosts;
-			if (target.length > 18) return this.say(`Please provide a real username.`);
-			const index = db!.findIndex(host => Tools.toId(host) === Tools.toId(target));
-			if (index >= 0) return this.say(`That user is already a host.`);
-			db!.push(Tools.toId(target));
+			const db = Storage.getDatabase(room);
+			const newHosts: string[] = [];
+			let error = '';
+			for (const username of args) {
+				if (username.length > 18) {
+					error = 'Please provide a valid username.';
+				}
+				const index = db.hosts!.findIndex(host => Tools.toId(host) === Tools.toId(username));
+				if (index >= 0) {
+					error = `${username.trim()} is already a host.`;
+				}
+				if (error) break;
+				newHosts.push(username);
+			}
+			if (error) return this.say(error);
+			db.hosts = db.hosts!.concat(newHosts);
 			Storage.exportDatabase(room.id);
-			this.say(`/modnote ADDHOST: ${Tools.toId(target)} by ${user.id}`);
-			return this.say(`User '${target}' successfully added as a host.`);
+			this.say(`/modnote ADDHOST: ${args.join(', ').trim()} by ${user.id}`);
+			if (args.length < 2) return this.say(`User '${target}' successfully added as a host.`);
+			return this.say(`Users added as hosts.`);
 		},
 		aliases: ['addhost'],
 	},
@@ -122,16 +134,26 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 			if (!user.canPerform(room, 'driver')) return;
 			if (!Users.self.canPerform(room, 'bot')) return;
 			if (!target) return this.say(`Correct syntax: ${commandCharacter}dehost __[user]__`);
-			target = target.trim();
-			const db = Storage.getDatabase(room).hosts;
-			if (!db) return this.say(`There are no hosts.`);
-			if (target.length > 18) return this.say(`Please provide a real username.`);
-			const index = db.findIndex(host => Tools.toId(host) === Tools.toId(target));
-			if (index < 0) return this.say(`That user is not a host.`);
-			db.splice(index, 1);
+			const args = target.trim().split(',');
+			const db = Storage.getDatabase(room);
+			if (!db.hosts) return this.say(`There are no hosts.`);
+			let error = '';
+			for (const username of args) {
+				if (username.length > 18) {
+					error = 'Please provide a valid username.';
+				}
+				const index = db.hosts.findIndex(host => Tools.toId(host) === Tools.toId(username));
+				if (index < 0) {
+					error = `${username.trim()} is not a host.`;
+				}
+				if (error) break;
+				db.hosts.splice(index, 1);
+			}
+			if (error) return this.say(error);
 			Storage.exportDatabase(room.id);
-			this.say(`/modnote REMOVEHOST: ${Tools.toId(target)} by ${user.id}`);
-			return this.say(`User '${target}' successfully removed as a host.`);
+			this.say(`/modnote REMOVEHOST: ${args.join(', ').trim()} by ${user.id}`);
+			if (args.length < 2) return this.say(`User '${target}' successfully removed as a host.`);
+			return this.say(`Users removed from hosts.`);
 		},
 		aliases: ['unhost', 'remhost', 'removehost'],
 	},
@@ -197,17 +219,17 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 					if (Dex.getFormat(rule)) {
 						const format = Dex.getExistingFormat(rule);
 						const charAt0 = rule.charAt(0);
-						sortedRules.push(`${charAt0 === '-' ? '-' : ''}${format.name}`);
+						sortedRules.push(`${charAt0 === '!' ? '!' : ''}${format.name}`);
 					}
 					if (Dex.getTag(rule)) {
 						const tag = Dex.getTag(rule)!;
 						const charAt0 = rule.charAt(0);
-						sortedRules.push(`${charAt0 === '+' ? '+' : '-'}${tag}`);
+						sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${tag}`);
 					}
 					if (Dex.getSpecies(rule)) {
 						const species = Dex.getExistingPokemon(rule);
 						const charAt0 = rule.charAt(0);
-						sortedRules.push(`${charAt0 === '+' ? '+' : '-'}${species.name}`);
+						sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${species.name}`);
 					}
 					if (Dex.getEffect(rule)) {
 						const effect = Dex.getEffect(rule)!;
@@ -216,7 +238,7 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 						if (rule.toLowerCase().slice(1).startsWith('item:')) isAmbiguous = 'item: ';
 						if (rule.toLowerCase().slice(1).startsWith('ability:')) isAmbiguous = 'ability: ';
 						const charAt0 = rule.charAt(0);
-						sortedRules.push(`${charAt0 === '+' ? '+' : '-'}${isAmbiguous}${effect.name}`);
+						sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${isAmbiguous}${effect.name}`);
 					}
 				}
 				return sortedRules.sort();
@@ -344,7 +366,7 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 				this.say(`/modnote TOUR: Ruleset adjusted by ${user.id}`);
 				this.say(`/tour rules ${stylizedRulesArray(db.tourRuleset).join(',')}`);
 				return;
-			} else if (['unban', 'removeban'].includes(arg0ID)) {
+			} else if (['unban', 'removeban', 'unrestrict'].includes(arg0ID)) {
 				const unbanlist = args.slice(1).join(' ').trim().split(',');
 				if (!unbanlist.length) {
 					return this.say(`Please provide Pokemon/items/moves/abilities/tags to unban.`);
@@ -364,11 +386,46 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 						const unbanIndex = db.tourRuleset.indexOf(`-${unban}`);
 						db.tourRuleset.splice(unbanIndex, 1);
 						Storage.exportDatabase(room.id);
+					} else if (db.tourRuleset.includes(`*${unban}`)) {
+						const unbanIndex = db.tourRuleset.indexOf(`*${unban}`);
+						db.tourRuleset.splice(unbanIndex, 1);
+						Storage.exportDatabase(room.id);
 					} else {
 						if (db.tourRuleset.includes(`+${unban}`)) {
 							return this.say(`The object ${unban} is already added.`);
 						}
 						db.tourRuleset.push(`+${unban}`);
+						Storage.exportDatabase(room.id);
+					}
+				}
+				this.say(`/modnote TOUR: Ruleset adjusted by ${user.id}`);
+				this.say(`/tour rules ${stylizedRulesArray(db.tourRuleset).join(',')}`);
+				return;
+			} else if (['restrict', 'addrestriction'].includes(arg0ID)) {
+				const restrictionlist = args.slice(1).join(' ').trim().split(',');
+				if (!restrictionlist.length) {
+					return this.say(`Please provide Pokemon/items/moves/abilities/tiers to ban.`);
+				}
+				for (const restriction of restrictionlist.map(r => r.trim())) {
+					if (Tools.toId(restriction) === 'metronome') {
+						return this.say(`Ambiguous ban 'metronome'; preface it with 'move:' or 'item:' (looks like "move:Metronome").`);
+					}
+					if (
+						!Dex.getSpecies(restriction) &&
+						!Dex.getEffect(restriction) &&
+						!Dex.getTag(restriction)
+					) {
+						return this.say(`Invalid restriction '${restriction}'`);
+					}
+					if (db.tourRuleset.includes(`+${restriction}`)) {
+						const banIndex = db.tourRuleset.indexOf(`+${restriction}`);
+						db.tourRuleset.splice(banIndex, 1);
+						Storage.exportDatabase(room.id);
+					} else {
+						if (db.tourRuleset.includes(`*${restriction}`)) {
+							return this.say(`The object ${restriction} is already added.`);
+						}
+						db.tourRuleset.push(`*${restriction}`);
 						Storage.exportDatabase(room.id);
 					}
 				}
@@ -391,7 +448,7 @@ export const commands: Dict<ICommandDefinition<Command, any>> = {
 							db.tourRuleset.push(rule);
 							Storage.exportDatabase(room.id);
 						}
-					} else if (['+', '-'].includes(rule.charAt(0))) {
+					} else if (['+', '-', '*'].includes(rule.charAt(0))) {
 						const slicedRule = rule.substr(1);
 						if (slicedRule.includes('+')) {
 							const slindex = slicedRule.indexOf('++');
