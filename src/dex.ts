@@ -219,7 +219,17 @@ export class Dex {
 			delete previous[i];
 		}
 
+<<<<<<< HEAD
 		this.loadAllData();
+=======
+	unrefWorkers(): void {
+		const workers = Object.keys(this.workers) as (keyof IDexWorkers)[];
+		for (const worker of workers) {
+			this.workers[worker].unref();
+			// @ts-expect-error
+			delete this.workers[worker];
+		}
+>>>>>>> Update
 	}
 
 	getDex(mod?: string): Dex {
