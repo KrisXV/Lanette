@@ -194,12 +194,26 @@ export const commands: CommandDefinitions<CommandContext> = {
 	},
 	eliminationtour: {
 		command(target, room, user) {
-			if (!this.isPm(room) && !user.canPerform(room, 'driver') && !user.isHost(room)) return;
 			const args = target.split(' ');
 			if (!args[0] || Tools.toId(args[0]) === 'help') {
-				return this.say(`\`\`@etour\`\` command guide: [[here <https://pastebin.com/raw/fN23vVUn>]]`);
+				let html = `<center><h1><code>${commandCharacter}eliminationtour</code> Help</h1></center>`;
+				html += `<h2>Creating a tournament</h2><p>To create a tour, the following conditions must be met:</p><ul>`;
+				html += `<li>A Driver (%) or higher or a Host (Hosts can be seen by having a Room Driver (%) type <code>${commandCharacter}hosts</code> in a room).</li>`;
+				html += `<li>Unown must be Bot (*) rank.</li><li>Tournaments must be enabled for Moderators (@) or lower.</li></ul>`;
+				html += `<p>The syntax to creating a tournament is <code>${commandCharacter}etour [formatid]</code>. You can also optionally add more arguments to simulate the <code>/tour</code> command.`;
+				html += `The full syntax is <code>${commandCharacter}etour [formatid], [tournament type (optional)], [player cap (optional)], [rounds (optional)], [name (optional)]</code>.</p>`;
+				html += `<ul><li><strong>[formatid]</strong>: This is the format that the tournament is created in (Gen 7 OU, etc.). If you are unsure if a format exists, do <code>/tier [format]</code> and/or ask a staff member.</li>`;
+				html += `<li><strong>[tournament type (optional)]</strong>: This is where you decide if you want the tournament to be an <code>elimination (elim for short)</code> tour or a <code>round robin (rr for short)</code> tour. If this is not provided, it defaults to elimination.</li>`;
+				html += `<li><strong>[player cap (optional)]</strong>: This is the maximum number of players that are allowed to enter. Defaults to 0 (no player cap).</li>`;
+				html += `<li><strong>[rounds (optional)]</strong>: This is the number of rounds that are in a tournament. Defaults to 1. You can go as high as you want, but the bot only has support for sextuple elimination at most (6 rounds).</li>`;
+				html += `<li><strong>[name (optional)]</strong>: The name, if provided, will be appended to the tournament upon being created. Defaults to the format's name.</li></ul>`;
+				html += `<h2>Tournament configuration</h2>`;
+				html += `<p><small>(WIP)</small></p>`;
+
+				return (Rooms.get('ruinsofalph') as Room).say(`/sendhtmlpage ${user.id},${commandCharacter}etour guide,${html}`, true);
 			}
 			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'driver') && !user.isHost(room)) return;
 			if (!Users.self.canPerform(room, 'bot')) return;
 			const db = Storage.getDatabase(room);
 			if (!db.tourRuleset) {
