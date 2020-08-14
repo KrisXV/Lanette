@@ -1085,6 +1085,32 @@ export class Dex {
 			'font-size:8pt;text-align:center"><b>' + type.name + '</b></div>';
 	}
 
+	getEffect(name: string): IAbility | IMove | IItem | undefined {
+		name = name.trim().toLowerCase();
+		const id = Tools.toId(name);
+		let effect: IAbility | IMove | IItem | undefined;
+		if (name.startsWith('move:')) {
+			effect = this.getMove(name.slice(5));
+		} else if (name.startsWith('item:')) {
+			effect = this.getItem(name.slice(5));
+		} else if (name.startsWith('ability:')) {
+			effect = this.getAbility(name.slice(8));
+		} else {
+			if (this.data.moveKeys.includes(id)) {
+				effect = this.getMove(id);
+			} else if (this.data.itemKeys.includes(id)) {
+				effect = this.getItem(id);
+			} else if (this.data.abilityKeys.includes(id)) {
+				effect = this.getAbility(id);
+			}
+		}
+		return effect;
+	}
+
+	getSpecies(name: string | IPokemon): IPokemon | undefined {
+		return this.getPokemon(typeof name === 'string' ? name : name.name);
+	}
+
 	/*
 		Formats
 	*/
