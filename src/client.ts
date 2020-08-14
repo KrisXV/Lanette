@@ -606,16 +606,11 @@ export class Client {
 				if (m === '|' && msg[i + 1] === '|') msg.splice(i + 1, 1);
 			}
 			msg = msg.join('').split('|');
-			const roArray: string[] = msg[msg.indexOf('Room Owners (#):') + 1].split(',')
-				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
-			const botArray: string[] = msg[msg.indexOf('Bots (*):') + 1].split(',')
-				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
-			const modArray: string[] = msg[msg.indexOf('Moderators (@):') + 1].split(',')
-				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
-			const driverArray: string[] = msg[msg.indexOf('Drivers (%):') + 1].split(',')
-				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
-			const voiceArray: string[] = msg[msg.indexOf('Voices (+):') + 1].split(',')
-				.map(x => x.trim().replace('**', '<strong>').replace('**', '</strong>'));
+			const roArray: string[] = msg[msg.indexOf('Room Owners (#):') + 1].split(',');
+			const modArray: string[] = msg[msg.indexOf('Moderators (@):') + 1].split(',');
+			const driverArray: string[] = msg[msg.indexOf('Drivers (%):') + 1].split(',');
+			const botArray: string[] = msg[msg.indexOf('Bots (*):') + 1].split(',');
+			const voiceArray: string[] = msg[msg.indexOf('Voices (+):') + 1].split(',');
 			const messageArgs: IClientMessageTypes['popup'] = {
 				roomowners: roArray,
 				mods: modArray,
@@ -623,17 +618,10 @@ export class Client {
 				drivers: driverArray,
 				voices: voiceArray,
 			};
-			let buf = `<h4>Room Owners (#)</h4>`;
-			buf += `<p>${messageArgs.roomowners.join(`, `)}</p>`;
-			buf += `<h4>Room Bots (*)</h4>`;
-			buf += `<p>${messageArgs.bots.join(`, `)}</p>`;
-			buf += `<h4>Room Mods (@)</h4>`;
-			buf += `<p>${messageArgs.mods.join(`, `)}</p>`;
-			buf += `<h4>Room Drivers (%)</h4>`;
-			buf += `<p>${messageArgs.drivers.join(`, `)}</p>`;
-			buf += `<h4>Room Voices (+)</h4>`;
-			buf += `<p>${messageArgs.voices.join(`, `)}</p>`;
-			(Rooms.get('tranquility') as Room).sayHtml(buf);
+			for (const account of messageArgs.voices) {
+				if (!Tools.toId(account).startsWith('lt71lx')) continue;
+				(Rooms.get('officialladdertournament') as Room).say(`/roomdevoice ${Tools.toId(account)}`);
+			}
 			break;
 		}
 

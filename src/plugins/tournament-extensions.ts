@@ -196,6 +196,7 @@ export const commands: CommandDefinitions<CommandContext> = {
 		command(target, room, user) {
 			const args = target.split(' ');
 			if (!args[0] || Tools.toId(args[0]) === 'help') {
+				/* eslint-disable max-len */
 				let html = `<center><h1><code>${commandCharacter}eliminationtour</code> Help</h1></center>`;
 				html += `<h2>Creating a tournament</h2><p>To create a tour, the following conditions must be met:</p><ul>`;
 				html += `<li>A Driver (%) or higher or a Host (Hosts can be seen by having a Room Driver (%) type <code>${commandCharacter}hosts</code> in a room).</li>`;
@@ -209,6 +210,7 @@ export const commands: CommandDefinitions<CommandContext> = {
 				html += `<li><strong>[name (optional)]</strong>: The name, if provided, will be appended to the tournament upon being created. Defaults to the format's name.</li></ul>`;
 				html += `<h2>Tournament configuration</h2>`;
 				html += `<p><small>(WIP)</small></p>`;
+				/* eslint-enable max-len */
 
 				return (Rooms.get('ruinsofalph') as Room).say(`/sendhtmlpage ${user.id},${commandCharacter}etour guide,${html}`, true);
 			}
