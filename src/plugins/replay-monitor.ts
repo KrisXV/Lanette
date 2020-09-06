@@ -45,13 +45,22 @@ export class Module implements IPluginInterface {
 			case 'chat':
 			case 'c':
 			case 'c:': {
-				const hasColon = messageType === 'c:';
-				const messageArguments: IClientMessageTypes['chat'] = {
-					timestamp: (hasColon ? (parseInt(messageParts[0]) + Client.serverTimeOffset) * 1000 : Date.now()),
-					rank: messageParts[hasColon ? 1 : 0].charAt(0),
-					username: messageParts[hasColon ? 1 : 0].substr(1),
-					message: messageParts.slice(hasColon ? 2 : 1).join("|"),
-				};
+				let messageArguments: IClientMessageTypes['chat'];
+				if (messageType === 'c:') {
+					messageArguments = {
+						timestamp: (parseInt(messageParts[0]) + Client.serverTimeOffset) * 1000,
+						rank: messageParts[1].charAt(0),
+						username: messageParts[1].substr(1),
+						message: messageParts.slice(2).join("|"),
+					};
+				} else {
+					messageArguments = {
+						timestamp: Date.now(),
+						rank: messageParts[0].charAt(0),
+						username: messageParts[0].substr(1),
+						message: messageParts.slice(1).join("|"),
+					};
+				}
 
 				const id = Tools.toId(messageArguments.username);
 				if (!id) return;
@@ -69,13 +78,12 @@ export class Module implements IPluginInterface {
 					if (messageArguments.message.includes('play.pokemonshowdown.com')) {
 						const msgPart = messageArguments.message;
 						const formatIdIndex = msgPart.includes('replay') ? 0 : 1;
-						const findBattle = msgPart.split('.com/')[1].split('-')[formatIdIndex];
+						const findBattle = msgPart.split('.com\/')[1].split('-')[formatIdIndex];
 						const format = Dex.getFormat(findBattle);
-						if (format && user !== Users.self &&
-							(!user.hasRank(room, 'voice') && !['typhlosion08', 'tnunes'].includes(user.id))) {
+						if (format && user !== Users.self && !user.hasRank(room, 'voice')) {
 							if (!format.team && !format.id.includes('metronome')) {
 								room.say(
-									`/forcehidelines  ${user.id}, 1, Please only post battle links related to random formats in here.`
+									`/forcehidelines ${user.id}, 1, Please only post battle links related to random formats in here.`
 								);
 							}
 						}
