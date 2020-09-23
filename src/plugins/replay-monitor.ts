@@ -68,7 +68,7 @@ export class Module implements IPluginInterface {
 				const user = Users.add(messageArguments.username, id);
 
 				if (room.id === 'ruinsofalph') {
-					if (messageArguments.message.includes('play.pokemonshowdown.com') && messageArguments.message.includes('gen8')) {
+					if (/(re)?play\.pokemonshowdown\.com\/(battle-|smogtours-)?gen8/.test(messageArguments.message)) {
 						if (user !== Users.self) {
 							room.say(`/forcehidelines ${user.id}, 1, Automated response: Please only post replays for gens 1-7 here.`);
 						}
