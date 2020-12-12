@@ -66,24 +66,25 @@ export class Module implements IPluginInterface {
 				if (!id) return;
 
 				const user = Users.add(messageArguments.username, id);
+				const botDev = (room.id === 'botdevelopment' && user.id === 'kris')
 
-				if (room.id === 'ruinsofalph') {
-					if (/(re)?play\.pokemonshowdown\.com\/(battle-|smogtours-)?gen8/.test(messageArguments.message)) {
+				if (room.id === 'ruinsofalph' || botDev) {
+					if (/(re)?play\.pokemonshowdown\.com\/(.+-)?gen8/i.test(messageArguments.message)) {
 						if (user !== Users.self) {
-							room.say(`/forcehidelines ${user.id}, 1, Automated response: Please only post replays for gens 1-7 here.`);
+							room.say(`/hidelines ${user.id}, 1, Automated response: Please only post replays for gens 1-7 here.`);
 						}
 					}
 				}
-				if (room.id === 'randombattles') {
-					if (messageArguments.message.includes('play.pokemonshowdown.com')) {
-						const msgPart = messageArguments.message;
-						const formatIdIndex = msgPart.includes('replay') ? 0 : 1;
-						const findBattle = msgPart.split('.com\/')[1].split('-')[formatIdIndex];
-						const format = Dex.getFormat(findBattle);
-						if (format && user !== Users.self && !user.hasRank(room, 'voice')) {
-							if (!format.team && !format.id.includes('metronome')) {
+				if (room.id === 'randombattles' || botDev) {
+					const matched = messageArguments.message.match(
+						/(?:re)?play\.pokemonshowdown\.com\/(?:smogtours-)?(?:battle-)?((?:gen\d)?[^-]+(?:-[^ ]*)?)/i
+					);
+					if (matched) {
+						const format = Dex.pokemonShowdownDex.getFormat(matched[1].split('-')[0]);
+						if (format.exists && user !== Users.self && !user.hasRank(room, botDev ? 'roomowner' : 'voice')) {
+							if (!(format.team || format.id.includes('metronome'))) {
 								room.say(
-									`/forcehidelines ${user.id}, 1, Please only post battle links related to random formats in here.`
+									`/hidelines ${user.id}, 1, Automated response: Please only post battle links related to random formats in here.`
 								);
 							}
 						}
