@@ -80,13 +80,6 @@ export class User {
 		return !(status === 'busy' || status === 'idle' || status === 'away');
 	}
 
-<<<<<<< HEAD
-	say(message: string, options?: IUserMessageOptions): void {
-		if (!(options && options.dontPrepare)) message = Tools.prepareMessage(message);
-		if (!(options && options.dontCheckFilter) && Client.willBeFiltered(message)) return;
-
-		Client.send({message: "|/pm " + this.name + ", " + message, type: 'pm', user: this.id, measure: !(options && options.dontMeasure)});
-=======
 	canPerform(room: Room, targetRank: GroupName = 'roomowner'): boolean {
 		return this.hasRank(room, targetRank) || this.isDeveloper();
 	}
@@ -103,11 +96,11 @@ export class User {
 		return storage.emojiWhitelist.includes(this.id);
 	}
 
-	say(message: string, dontPrepare?: boolean, dontCheckFilter?: boolean): void {
-		if (!dontPrepare) message = Tools.prepareMessage(message);
-		if (!dontCheckFilter && Client.willBeFiltered(message)) return;
-		Client.send("|/pm " + this.name + ", " + message);
->>>>>>> Add stuff
+	say(message: string, options?: IUserMessageOptions): void {
+		if (!(options && options.dontPrepare)) message = Tools.prepareMessage(message);
+		if (!(options && options.dontCheckFilter) && Client.willBeFiltered(message)) return;
+
+		Client.send({message: "|/pm " + this.name + ", " + message, type: 'pm', user: this.id, measure: !(options && options.dontMeasure)});
 	}
 
 	sayCommand(command: string, dontCheckFilter?: boolean): void {

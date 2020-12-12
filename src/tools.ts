@@ -868,8 +868,6 @@ export class Tools {
 		fs.writeFileSync(tempFilepath, data);
 		fs.renameSync(tempFilepath, filepath);
 	}
-<<<<<<< HEAD
-=======
 
 	// eslint-disable-next-line @typescript-eslint/no-invalid-void-type
 	uploadToHastebin(text: string, callback: (k: string) => void): false | void {
@@ -921,7 +919,6 @@ export class Tools {
 		await CommandParser.parse(user, user, Config.commandCharacter + 'reload dex');
 	}
 	*/
->>>>>>> Add stuff
 }
 
 export const instantiate = (): void => {
