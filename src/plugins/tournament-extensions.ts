@@ -535,7 +535,12 @@ export class Module implements IPluginInterface {
 							json: JSON.parse(messageParts.join("|")) as ITournamentUpdateJson,
 						};
 						if (!room.tournament) Tournaments.createTournament(room, messageArguments.json);
-						if (room.tournament) room.tournament.update(messageArguments.json);
+						if (room.tournament) {
+							room.tournament.update(messageArguments.json);
+							if (room.tournament.started && room.tournament.getRemainingPlayerCount() <= 4) {
+								room.sayCommand('/tour forcepublic on');
+							}
+						}
 						break;
 					}
 
