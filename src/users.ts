@@ -86,6 +86,7 @@ export class User {
 
 	isHost(room: Room): boolean {
 		const hosts = Storage.getDatabase(room).hosts;
+		// eslint-disable-next-line @typescript-eslint/unbound-method
 		if (hosts) return hosts.map(Tools.toId).includes(this.id);
 		return false;
 	}

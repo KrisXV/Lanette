@@ -583,8 +583,9 @@ export class Storage {
 		return true;
 	}
 
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	updateLastSeen(user: User, time: number): void {
-		const database = this.getGlobalDatabase();
+		// const database = this.getGlobalDatabase();
 		// if (!database.lastSeen) database.lastSeen = {};
 		// database.lastSeen[user.id] = time;
 	}

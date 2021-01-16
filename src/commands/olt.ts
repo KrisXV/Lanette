@@ -1,9 +1,8 @@
-import type { CommandDefinitions } from "../types/command-parser";
-import type { CommandContext } from "../command-parser";
+import type { BaseCommandDefinitions } from "../types/command-parser";
 
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
 
-export const commands: CommandDefinitions<CommandContext> = {
+export const commands: BaseCommandDefinitions = {
 	voice: {
 		command(target, room, user) {
 			if (this.isPm(room)) return;
@@ -15,4 +14,4 @@ export const commands: CommandDefinitions<CommandContext> = {
 	},
 };
 
-/* eslint-enable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
+/* eslint-enable */
