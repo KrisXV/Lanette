@@ -1,37 +1,77 @@
-import type { CommandDefinitions } from "../types/command-parser";
-import type { CommandContext } from "../command-parser";
-import type { IPluginInterface } from "../types/plugins";
-import type { Room } from "../rooms";
-import type { IClientMessageTypes, ITournamentMessageTypes } from "../types/client";
-import type { ITournamentUpdateJson, ITournamentEndJson } from "../types/tournaments";
-import { commandCharacter } from "../config";
+import type { BaseCommandDefinitions } from "../types/command-parser";
+
+/* eslint-disable @typescript-eslint/unbound-method */
 
 const customRulesURL = `https://github.com/smogon/pokemon-showdown/blob/master/config/CUSTOM-RULES.md`;
 
+function stylizedRulesArray(rules: string[]): string[] {
+	const sortedRules: string[] = [];
+	for (const rule of rules) {
+		if (Dex.getFormat(rule)) {
+			const format = Dex.getExistingFormat(rule);
+			const charAt0 = rule.charAt(0);
+			sortedRules.push(`${charAt0 === '!' ? '!' : ''}${format.name}`);
+		}
+		if (Dex.getTag(rule)) {
+			const tag = Dex.getTag(rule)!;
+			const charAt0 = rule.charAt(0);
+			// eslint-disable-next-line @typescript-eslint/no-extra-parens
+			sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${tag}`);
+		}
+		if (Dex.getSpecies(rule)) {
+			const species = Dex.getExistingPokemon(rule);
+			const charAt0 = rule.charAt(0);
+			// eslint-disable-next-line @typescript-eslint/no-extra-parens
+			sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${species.name}`);
+		}
+		if (Dex.getEffect(rule)) {
+			const effect = Dex.getEffect(rule)!;
+			let isAmbiguous = '';
+			if (rule.toLowerCase().slice(1).startsWith('move:')) isAmbiguous = 'move: ';
+			if (rule.toLowerCase().slice(1).startsWith('item:')) isAmbiguous = 'item: ';
+			if (rule.toLowerCase().slice(1).startsWith('ability:')) isAmbiguous = 'ability: ';
+			const charAt0 = rule.charAt(0);
+			// eslint-disable-next-line @typescript-eslint/no-extra-parens
+			sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${isAmbiguous}${effect.name}`);
+		}
+	}
+	return sortedRules.sort();
+}
+
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
 
-export const commands: CommandDefinitions<CommandContext> = {
-	eliminationtour: {
+export const commands: BaseCommandDefinitions = {
+	eeeeeeeeeeeeeeeeeeeeeeeliminationtour: {
 		command(target, room, user) {
+			const commandCharacter = Config.commandCharacter!;
 			const args = target.split(' ');
 			if (!args[0] || Tools.toId(args[0]) === 'help') {
+				const html: string[] = [];
 				/* eslint-disable max-len */
-				let html = `<center><h1><code>${commandCharacter}eliminationtour</code> Help</h1></center>`;
-				html += `<h2>Creating a tournament</h2><p>To create a tour, the following conditions must be met:</p><ul>`;
-				html += `<li>A Driver (%) or higher or a Host (Hosts can be seen by having a Room Driver (%) type <code>${commandCharacter}hosts</code> in a room).</li>`;
-				html += `<li>Unown must be Bot (*) rank.</li><li>Tournaments must be enabled for Moderators (@) or lower.</li></ul>`;
-				html += `<p>The syntax to creating a tournament is <code>${commandCharacter}etour [formatid]</code>. You can also optionally add more arguments to simulate the <code>/tour</code> command.`;
-				html += `The full syntax is <code>${commandCharacter}etour [formatid], [tournament type (optional)], [player cap (optional)], [rounds (optional)], [name (optional)]</code>.</p>`;
-				html += `<ul><li><strong>[formatid]</strong>: This is the format that the tournament is created in (Gen 7 OU, etc.). If you are unsure if a format exists, do <code>/tier [format]</code> and/or ask a staff member.</li>`;
-				html += `<li><strong>[tournament type (optional)]</strong>: This is where you decide if you want the tournament to be an <code>elimination (elim for short)</code> tour or a <code>round robin (rr for short)</code> tour. If this is not provided, it defaults to elimination.</li>`;
-				html += `<li><strong>[player cap (optional)]</strong>: This is the maximum number of players that are allowed to enter. Defaults to 0 (no player cap).</li>`;
-				html += `<li><strong>[rounds (optional)]</strong>: This is the number of rounds that are in a tournament. Defaults to 1. You can go as high as you want, but the bot only has support for sextuple elimination at most (6 rounds).</li>`;
-				html += `<li><strong>[name (optional)]</strong>: The name, if provided, will be appended to the tournament upon being created. Defaults to the format's name.</li></ul>`;
-				html += `<h2>Tournament configuration</h2>`;
-				html += `<p><small>(WIP)</small></p>`;
+				html.push(`<center><h1><code>${commandCharacter}eliminationtour</code> Help</h1></center>`);
+				html.push(`<h2>Creating a tournament</h2><p>To create a tour, the following conditions must be met:</p>`);
+				html.push(`<ul>`);
+				html.push(`<li>A Driver (%) or higher or a Host.<ul><li>`);
+				html.push(`Hosts can be seen by having a Room Driver (%) type <code>${commandCharacter}hosts</code> in a room.</li>`);
+				html.push(`</ul></li><li>Unown must be Bot (*) rank.</li>`);
+				html.push(`<li>Tournaments must be enabled for Moderators (@) or lower.</li>`);
+				html.push(`</ul>`);
+				html.push(`<p>The syntax to creating a tournament is <code>${commandCharacter}etour [formatid]</code>.`);
+				html.push(`You can also optionally add more arguments to simulate the <code>/tour</code> command.`);
+				html.push(`The full syntax is <code>${commandCharacter}etour [formatid], [tournament type (optional)], `);
+				html.push(`[player cap (optional)], [rounds (optional)], [name (optional)]</code>.</p>`);
+				html.push(`<ul>`);
+				html.push(`<li><strong>[formatid]</strong>: This is the format that the tournament is created in (Gen 7 OU, etc.).`);
+				html.push(` If you are unsure if a format exists, do <code>/tier [format]</code> and/or ask a staff member.</li>`);
+				html.push(`<li><strong>[tournament type (optional)]</strong>: This is where you decide if you want the tournament to be an <code>elimination (elim for short)</code> tour or a <code>round robin (rr for short)</code> tour. If this is not provided, it defaults to elimination.</li>`);
+				html.push(`<li><strong>[player cap (optional)]</strong>: This is the maximum number of players that are allowed to enter. Defaults to 0 (no player cap).</li>`);
+				html.push(`<li><strong>[rounds (optional)]</strong>: This is the number of rounds that are in a tournament. Defaults to 1. You can go as high as you want, but the bot only has support for sextuple elimination at most (6 rounds).</li>`);
+				html.push(`<li><strong>[name (optional)]</strong>: The name, if provided, will be appended to the tournament upon being created. Defaults to the format's name.</li></ul>`);
+				html.push(`<h2>Tournament configuration</h2>`);
+				html.push(`<p><small>(WIP)</small></p>`);
 				/* eslint-enable max-len */
 
-				return (Rooms.get('ruinsofalph') as Room).say(`/sendhtmlpage ${user.id},${commandCharacter}etour guide,${html}`, {dontPrepare: true});
+				return Rooms.get('ruinsofalph')!.sendHtmlPage(user, `${commandCharacter}etour guide`, html.join());
 			}
 			if (this.isPm(room)) return;
 			if (!user.canPerform(room, 'driver') && !user.isHost(room)) return;
@@ -51,52 +91,30 @@ export const commands: CommandDefinitions<CommandContext> = {
 					autostart: 2,
 				};
 			}
-			const stylizedRulesArray: (k: string[]) => string[] = (rules: string[]) => {
-				const sortedRules: string[] = [];
-				for (const rule of rules) {
-					if (Dex.getFormat(rule)) {
-						const format = Dex.getExistingFormat(rule);
-						const charAt0 = rule.charAt(0);
-						sortedRules.push(`${charAt0 === '!' ? '!' : ''}${format.name}`);
-					}
-					if (Dex.getTag(rule)) {
-						const tag = Dex.getTag(rule)!;
-						const charAt0 = rule.charAt(0);
-						sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${tag}`);
-					}
-					if (Dex.getSpecies(rule)) {
-						const species = Dex.getExistingPokemon(rule);
-						const charAt0 = rule.charAt(0);
-						sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${species.name}`);
-					}
-					if (Dex.getEffect(rule)) {
-						const effect = Dex.getEffect(rule)!;
-						let isAmbiguous = '';
-						if (rule.toLowerCase().slice(1).startsWith('move:')) isAmbiguous = 'move: ';
-						if (rule.toLowerCase().slice(1).startsWith('item:')) isAmbiguous = 'item: ';
-						if (rule.toLowerCase().slice(1).startsWith('ability:')) isAmbiguous = 'ability: ';
-						const charAt0 = rule.charAt(0);
-						sortedRules.push(`${charAt0 === '+' ? '+' : (charAt0 === '-' ? '-' : '*')}${isAmbiguous}${effect.name}`);
-					}
-				}
-				return sortedRules.sort();
-			};
 			const arg0ID = Tools.toId(args[0]);
-			if (['start', 'forcestart'].includes(arg0ID)) {
-				this.say(`/modnote TOUR: started by ${user.id}`);
+			switch (arg0ID) {
+			case 'start':
+			case 'forcestart': {
+				if (!user.hasRank(room, 'driver')) this.say(`/modnote TOUR: started by ${user.id}`);
 				this.say(`/tour start`);
-				return;
-			} else if (['end', 'forceend'].includes(arg0ID)) {
-				this.say(`/modnote TOUR: ended by ${user.id}`);
-				this.say('/tour end');
-				return;
-			} else if (['name', 'setname'].includes(arg0ID)) {
+				break;
+			}
+			case 'end':
+			case 'forceend': {
+				if (!user.hasRank(room, 'driver')) this.say(`/modnote TOUR: ended by ${user.id}`);
+				this.say(`/tour end`);
+				break;
+			}
+			case 'name':
+			case 'setname': {
 				const name = args.slice(1).join(' ').trim();
 				if (!name) return this.say(`Correct syntax: ${commandCharacter}etour name __[name]__`);
-				this.say(`/modnote TOUR: renamed by ${user.id}`);
+				if (!user.hasRank(room, 'driver')) this.say(`/modnote TOUR: renamed by ${user.id}`);
 				this.say(`/tour name ${name}`);
-				return;
-			} else if (['clearname', 'delname'].includes(arg0ID)) {
+				break;
+			}
+			}
+			if (['clearname', 'delname'].includes(arg0ID)) {
 				this.say(`/modnote TOUR: name cleared by ${user.id}`);
 				this.say(`/tour clearname`);
 				return;
@@ -389,17 +407,6 @@ export const commands: CommandDefinitions<CommandContext> = {
 					this.say(`/tour modjoin disallow`);
 				}
 				return;
-			} else if (['public', 'forcepublic'].includes(arg0ID)) {
-				if (!args[1] || !['on', 'off'].includes(Tools.toId(args[1]))) {
-					return this.say(`Correct syntax: ${commandCharacter}etour forcepublic __["on" | "off"]__`);
-				}
-				this.say(`/modnote TOUR: Matches forced public toggled by ${user.id}`);
-				if (Tools.toId(args[1]) === 'on') {
-					this.say(`/tour forcepublic on`);
-				} else {
-					this.say(`/tour forcepublic off`);
-				}
-				return;
 			} else if (['cap', 'playercap'].includes(arg0ID)) {
 				const arg1Int = parseInt(args[1]);
 				if (!args[1] || isNaN(arg1Int)) {
@@ -466,195 +473,190 @@ export const commands: CommandDefinitions<CommandContext> = {
 				return;
 			}
 		},
-		aliases: ['etour'],
+		aliases: ['eeetour'],
+	},
+	tourconfig: {
+		command(target, room, user) {
+			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'moderator')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
+			if (!target) return this.say(`${Config.commandCharacter!}econfig autostart/autodq`);
+			target = target.trim();
+			const args = target.split(' ');
+			const arg1ID = Tools.toId(args[1]);
+			const arg1Int = Number(arg1ID);
+			const arg2ID = Tools.toId(args[2]);
+			const arg2Int = Number(arg2ID);
+			const database = Storage.getDatabase(room);
+			if (!database.tourcfg) {
+				database.tourcfg = {
+					autodq: {
+						randoms: 2,
+						normal: 3,
+					},
+					autostart: 3,
+				};
+				Storage.exportDatabase(room.id);
+			}
+			const db = database.tourcfg;
+			switch (Tools.toId(args[0])) {
+			case 'reset':
+				database.tourcfg = {
+					autodq: {
+						randoms: 2,
+						normal: 3,
+					},
+					autostart: 3,
+				};
+				Storage.exportDatabase(room.id);
+				this.say("``eliminationtour`` configuration reset.");
+				return;
+			case 'autodq':
+			case 'setautodq':
+			case 'adq':
+				if (!args[1]) {
+					return this.say(`Correct syntax: ${Config.commandCharacter!}econfig autodq randoms/normal __[number | off]__`);
+				}
+				if (Tools.toId(args[1]) === 'randoms') {
+					if (arg2ID !== 'off' && isNaN(arg2Int)) {
+						return this.say(`${args[2]} must either be an integer or "off".`);
+					}
+					if (arg2ID === 'off' || arg2Int === 0) {
+						db.autodq.randoms = 'off';
+						Storage.exportDatabase(room.id);
+						return this.say(`Autodq timer for random formats successfully turned off.`);
+					}
+					db.autodq.randoms = arg2Int;
+					Storage.exportDatabase(room.id);
+					return this.say(`Autodq timer for random formats successfully set to ${arg2Int} minutes.`);
+				}
+				if (arg2ID !== 'off' && isNaN(arg2Int)) {
+					return this.say(`${args[2]} must either be an integer or "off".`);
+				}
+				if (arg2ID === 'off' || arg2Int === 0) {
+					db.autodq.normal = 'off';
+					Storage.exportDatabase(room.id);
+					return this.say(`Autodq timer for non-random formats successfully turned off.`);
+				}
+				db.autodq.normal = arg2Int;
+				Storage.exportDatabase(room.id);
+				return this.say(`Autodq timer for non-random formats successfully set to ${arg2Int} minutes.`);
+			case 'autostart':
+			case 'setautostart':
+			case 'as':
+				if (!args[1]) {
+					return this.say(`Correct syntax: ${Config.commandCharacter!}econfig autostart __[number | off]__`);
+				}
+				if (arg1ID !== 'off' && isNaN(arg1Int)) return this.say(`${args[2]} must either be a number or "off".`);
+				if (arg1ID === 'off' || arg1Int === 0) {
+					db.autostart = "off";
+					Storage.exportDatabase(room.id);
+					return this.say(`Autostart successfully turned off.`);
+				}
+				db.autostart = arg1Int;
+				Storage.exportDatabase(room.id);
+				return this.say(`Autostart successfully set to ${arg1Int}.`);
+			default:
+				return this.say(`Correct syntax: ${Config.commandCharacter!}econfig autostart/autodq`);
+			}
+		},
+		aliases: ['econfig'],
+	},
+	tourhost: {
+		command(target, room, user) {
+			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
+			if (!user.canPerform(room, 'driver')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
+			if (!target) return this.say(`Correct syntax: ${Config.commandCharacter!}host __[user]__`);
+			const args = target.trim().split(',');
+			const db = Storage.getDatabase(room);
+			if (!db.hosts) {
+				db.hosts = [];
+				Storage.exportDatabase(room.id);
+			}
+			const newHosts: string[] = [];
+			let error = '';
+			for (const username of args) {
+				if (username.length > 18) {
+					error = 'Please provide a valid username.';
+				}
+				const index = db.hosts.findIndex(host => Tools.toId(host) === Tools.toId(username));
+				if (index >= 0) {
+					error = `${username.trim()} is already a host.`;
+				}
+				if (error) break;
+				newHosts.push(username);
+			}
+			if (error) return this.say(error);
+			db.hosts = db.hosts.concat(newHosts);
+			Storage.exportDatabase(room.id);
+			this.say(`/modnote ADDHOST: ${args.join(', ').trim()} by ${user.id}`);
+			if (args.length < 2) return this.say(`User '${target}' successfully added as a host.`);
+			return this.say(`Users added as hosts.`);
+		},
+		aliases: ['addhost'],
+	},
+	tourdehost: {
+		command(target, room, user) {
+			if (this.isPm(room)) return this.say(`This command can only be used in rooms.`);
+			if (!user.canPerform(room, 'driver')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
+			if (!target) return this.say(`Correct syntax: ${Config.commandCharacter!}dehost __[user]__`);
+			const args = target.trim().split(',');
+			const db = Storage.getDatabase(room);
+			if (!db.hosts) return this.say(`There are no hosts.`);
+			let error = '';
+			for (const username of args) {
+				if (username.length > 18) {
+					error = 'Please provide a valid username.';
+				}
+				const index = db.hosts.findIndex(host => Tools.toId(host) === Tools.toId(username));
+				if (index < 0) {
+					error = `${username.trim()} is not a host.`;
+				}
+				if (error) break;
+				db.hosts.splice(index, 1);
+			}
+			if (error) return this.say(error);
+			Storage.exportDatabase(room.id);
+			this.say(`/modnote REMOVEHOST: ${args.join(', ').trim()} by ${user.id}`);
+			if (args.length < 2) return this.say(`User '${target}' successfully removed as a host.`);
+			return this.say(`Users removed from hosts.`);
+		},
+		aliases: ['tourunhost', 'remhost', 'removehost'],
+	},
+	clearhosts: {
+		command(target, room, user) {
+			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'roomowner')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
+			target = target.trim();
+			Storage.getDatabase(room).hosts = [];
+			Storage.exportDatabase(room.id);
+			this.say(`/modnote ${user.name} cleared the host list.`);
+			return this.say(`Host list successfully cleared.`);
+		},
+	},
+	viewhosts: {
+		command(target, room, user) {
+			if (this.isPm(room)) return;
+			if (!user.canPerform(room, 'driver')) return;
+			if (!Users.self.canPerform(room, 'bot')) return;
+			const hosts = Storage.getDatabase(room).hosts;
+			if (!hosts || !hosts.length) return this.say(`There are currently no hosts.`);
+			let buf = `<psicon pokemon="unown"><br /><details><summary><strong>${room.title}</strong> hosts</summary><ol>`;
+			for (const host of hosts.sort()) {
+				buf += `<li><span class="username" data-name="${host}" style="white-space:nowrap;">${host.trim()}</span></li>`;
+			}
+			buf += `</ol></details>`;
+			this.sayUhtml('hosts', `<div class="infobox">${buf}</div>`, room);
+			/*const prettyHostList = `Hosts for ${room.id}:\n\n${hosts.map((host, index) => `${index + 1}: ${host}`).join('\n')}`;
+			Tools.uploadToHastebin(prettyHostList, hastebinUrl => {
+				this.say(`**${room.id}** hosts: ${hastebinUrl}`);
+			});*/
+		},
+		aliases: ['hosts'],
 	},
 };
 
-/* eslint-enable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
-
-export class Module implements IPluginInterface {
-	name: string = "Elimination Tournaments";
-
-	parseMessage(room: Room, messageType: keyof IClientMessageTypes, messageParts: string[]): true | undefined {
-		switch (messageType) {
-			case 'tournament': {
-				if (!Config.allowTournaments || !Config.allowTournaments.includes(room.id)) return;
-				const type = messageParts[0] as keyof ITournamentMessageTypes;
-				messageParts.shift();
-				switch (type) {
-					case 'create': {
-						const msgArguments: ITournamentMessageTypes['create'] = {
-							format: Dex.getExistingFormat(messageParts[0]),
-							generator: messageParts[1],
-							playerCap: parseInt(messageParts[2]),
-						};
-						const format = msgArguments.format;
-						const database = Storage.getDatabase(room);
-						const globalDB = Storage.getGlobalDatabase();
-						if (!format.id.startsWith('gen8')) {
-							if (globalDB.privateRooms && !globalDB.privateRooms.includes(room.id)) {
-								if (room.id !== 'ruinsofalph') {
-									if (room.id === 'oldshark') {
-										// (Rooms.get('ruinsofalph') as Room).say(`[Gen ${Tools.toId(messageParts[0])[3]}] (Pure) Hackmons in <<${room.id}>>`);
-									} else {
-										(Rooms.get('ruinsofalph') as Room).say(`${format.name} in <<${room.id}>>`);
-									}
-								} else {
-									if (format.team) {
-										(Rooms.get('randombattles') as Room).say(`${format.name} in <<ruinsofalph>>`);
-									}
-								}
-							}
-						}
-						if (database.tourRuleset) {
-							database.tourRuleset = [];
-							Storage.exportDatabase(room.id);
-						}
-
-						if (Users.self.hasRank(room, 'bot')) {
-							const tourcfg = database.tourcfg;
-							if (tourcfg && tourcfg.autodq) {
-								let used = tourcfg.autodq.normal;
-								if (format.team) used = tourcfg.autodq.randoms;
-								if (!['off', 0].includes(used)) {
-									room.say(`/tour autodq ${used}`);
-								}
-							}
-							if (tourcfg && tourcfg.autostart) {
-								const used = tourcfg.autostart;
-								if (!['off', 0].includes(used)) {
-									room.say(`/tour autostart ${used}`);
-								}
-							}
-						}
-						break;
-					}
-
-					case 'update': {
-						const messageArguments: ITournamentMessageTypes['update'] = {
-							json: JSON.parse(messageParts.join("|")) as ITournamentUpdateJson,
-						};
-						if (!room.tournament) Tournaments.createTournament(room, messageArguments.json);
-						if (room.tournament) {
-							room.tournament.update(messageArguments.json);
-							if (room.tournament.started && room.tournament.getRemainingPlayerCount() <= 4) {
-								room.sayCommand('/tour forcepublic on');
-							}
-						}
-						break;
-					}
-
-					case 'updateEnd': {
-						if (room.tournament) room.tournament.updateEnd();
-						break;
-					}
-
-					case 'end': {
-						const messageArguments: ITournamentMessageTypes['end'] = {
-							json: JSON.parse(messageParts.join("|")) as ITournamentEndJson,
-						};
-						if (!room.tournament) Tournaments.createTournament(room, messageArguments.json);
-						if (room.tournament) {
-							room.tournament.update(messageArguments.json);
-							room.tournament.updateEnd();
-							room.tournament.end();
-						}
-						const database = Storage.getDatabase(room);
-						const now = Date.now();
-						database.lastTournamentTime = now;
-
-						// delayed scheduled tournament
-						if (room.id in Tournaments.nextScheduledTournaments && Tournaments.nextScheduledTournaments[room.id].time <= now) {
-							Tournaments.setScheduledTournamentTimer(room);
-						} else {
-							let queuedTournament = false;
-							if (database.queuedTournament) {
-								const format = Dex.getFormat(database.queuedTournament.formatid, true);
-								if (format) {
-									queuedTournament = true;
-									if (!database.queuedTournament.time) {
-										database.queuedTournament.time = now + Tournaments.queuedTournamentTime;
-									}
-									Tournaments.setTournamentTimer(room, database.queuedTournament.time, format,
-										database.queuedTournament.playerCap, database.queuedTournament.scheduled);
-								} else {
-									delete database.queuedTournament;
-									Storage.exportDatabase(room.id);
-								}
-							}
-
-							if (!queuedTournament) {
-								if (Config.randomTournamentTimers && room.id in Config.randomTournamentTimers &&
-									Tournaments.canSetRandomTournament(room)) {
-									Tournaments.setRandomTournamentTimer(room, Config.randomTournamentTimers[room.id]);
-								} else if (room.id in Tournaments.scheduledTournaments) {
-									Tournaments.setScheduledTournamentTimer(room);
-								}
-							}
-						}
-						break;
-					}
-
-					case 'forceend': {
-						if (room.tournament) room.tournament.forceEnd();
-						break;
-					}
-
-					case 'start': {
-						if (room.tournament) room.tournament.start();
-						break;
-					}
-
-					case 'join': {
-						if (!room.tournament) return;
-
-						const messageArguments: ITournamentMessageTypes['join'] = {
-							username: messageParts[0],
-						};
-						room.tournament.createPlayer(messageArguments.username);
-						break;
-					}
-
-					case 'leave':
-					case 'disqualify': {
-						if (!room.tournament) return;
-
-						const messageArguments: ITournamentMessageTypes['leave'] = {
-							username: messageParts[0],
-						};
-						room.tournament.destroyPlayer(messageArguments.username);
-						break;
-					}
-
-					case 'battlestart': {
-						if (!room.tournament) return;
-
-						const messageArguments: ITournamentMessageTypes['battlestart'] = {
-							usernameA: messageParts[0],
-							usernameB: messageParts[1],
-							roomid: messageParts[2],
-						};
-						room.tournament.onBattleStart(messageArguments.usernameA, messageArguments.usernameB, messageArguments.roomid);
-						break;
-					}
-
-					case 'battleend': {
-						if (!room.tournament) return;
-
-						const messageArguments: ITournamentMessageTypes['battleend'] = {
-							usernameA: messageParts[0],
-							usernameB: messageParts[1],
-							result: messageParts[2] as 'win' | 'loss' | 'draw',
-							score: messageParts[3].split(',') as [string, string],
-							recorded: messageParts[4] as 'success' | 'fail',
-							roomid: messageParts[5],
-						};
-						room.tournament.onBattleEnd(messageArguments.usernameA, messageArguments.usernameB, messageArguments.score,
-							messageArguments.roomid);
-						break;
-					}
-				}
-			}
-		}
-	}
-}
+/* eslint-enable */

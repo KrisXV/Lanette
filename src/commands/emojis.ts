@@ -1,10 +1,9 @@
-import type { CommandDefinitions } from "../types/command-parser";
-import type { CommandContext } from "../command-parser";
 import type { Room } from "../rooms";
+import type { BaseCommandDefinitions } from "../types/command-parser";
 
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types */
 
-export const commands: CommandDefinitions<CommandContext> = {
+export const commands: BaseCommandDefinitions = {
 	emojiwhitelist: {
 		command(target, room, user) {
 			const args = target.split(' ');
@@ -15,12 +14,14 @@ export const commands: CommandDefinitions<CommandContext> = {
 				if (this.isPm(room) || !user.canPerform(room, 'roomowner')) {
 					return this.say(`/pm ${user.id}, You can't perform that command.`);
 				}
-				if (!Storage.getDatabase(room).emojiWhitelist) {
-					Storage.getDatabase(room).emojiWhitelist = [];
+				const database = Storage.getDatabase(room);
+				if (!database.emojiWhitelist) {
+					database.emojiWhitelist = [];
 					Storage.exportDatabase(room.id);
 				}
-				const wl = Storage.getDatabase(room).emojiWhitelist!;
+				const wl = database.emojiWhitelist;
 				if (Tools.toId(args[0]) === 'roomadd') {
+					// eslint-disable-next-line @typescript-eslint/unbound-method
 					if (wl.map(Tools.toId).includes(Tools.toId(userTarget))) {
 						return this.say(`The user '${Tools.toId(userTarget)}' is already whitelisted for the room ${room.title}.`);
 					}
@@ -41,7 +42,7 @@ export const commands: CommandDefinitions<CommandContext> = {
 		aliases: ['ewl'],
 	},
 	addemoji: {
-		command(target, room, user) {
+		command(target, room) {
 			if (!this.isPm(room)) return;
 			const args = target.split(',');
 			if (!args.length || !args[0] || !args[1]) return;
@@ -162,4 +163,4 @@ export const commands: CommandDefinitions<CommandContext> = {
 	},
 };
 
-/* eslint-enable @typescript-eslint/explicit-function-return-type,@typescript-eslint/no-unused-vars*/
+/* eslint-enable */

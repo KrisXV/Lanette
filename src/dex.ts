@@ -763,17 +763,17 @@ export class Dex {
 			targetType = targetType as string;
 			if (!Object.prototype.hasOwnProperty.call(this.immunityCache, sourceType)) {
 				this.immunityCache[sourceType] = {};
-			} else if (Object.prototype.hasOwnProperty.call(this.immunityCache[sourceType], targetType as string)) {
-				return this.immunityCache[sourceType][targetType as string];
+			} else if (Object.prototype.hasOwnProperty.call(this.immunityCache[sourceType], targetType)) {
+				return this.immunityCache[sourceType][targetType];
 			}
 
-			const typeData = this.getType(targetType as string);
+			const typeData = this.getType(targetType);
 			if (typeData && typeData.damageTaken[sourceType] === 3) {
-				this.immunityCache[sourceType][targetType as string] = true;
+				this.immunityCache[sourceType][targetType] = true;
 				return true;
 			}
 
-			this.immunityCache[sourceType][targetType as string] = false;
+			this.immunityCache[sourceType][targetType] = false;
 			return false;
 		}
 	}
@@ -817,11 +817,11 @@ export class Dex {
 			targetType = targetType as string;
 			if (!Object.prototype.hasOwnProperty.call(this.effectivenessCache, sourceType)) {
 				this.effectivenessCache[sourceType] = {};
-			} else if (Object.prototype.hasOwnProperty.call(this.effectivenessCache[sourceType], targetType as string)) {
-				return this.effectivenessCache[sourceType][targetType as string];
+			} else if (Object.prototype.hasOwnProperty.call(this.effectivenessCache[sourceType], targetType)) {
+				return this.effectivenessCache[sourceType][targetType];
 			}
 
-			const typeData = this.getType(targetType as string);
+			const typeData = this.getType(targetType);
 			let effectiveness: number;
 			if (typeData) {
 				switch (typeData.damageTaken[sourceType]) {
@@ -845,7 +845,7 @@ export class Dex {
 				effectiveness = 0;
 			}
 
-			this.effectivenessCache[sourceType][targetType as string] = effectiveness;
+			this.effectivenessCache[sourceType][targetType] = effectiveness;
 			return effectiveness;
 		}
 	}
