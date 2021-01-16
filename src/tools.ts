@@ -4,13 +4,15 @@ import path = require('path');
 import url = require('url');
 
 import type { PRNG } from './lib/prng';
-import type { HexColor, IParsedSmogonLink } from './types/tools';
+import { eggGroupHexCodes, hexCodes, namedHexCodes, pokemonColorHexCodes, typeHexCodes } from './tools-hex-codes';
+import type { IExtractedBattleId, IHexCodeData, IParsedSmogonLink, NamedHexCode } from './types/tools';
 import type { IParam, IParametersGenData, ParametersSearchType } from './workers/parameters';
 
 const ALPHA_NUMERIC_REGEX = /[^a-zA-Z0-9 ]/g;
 const ID_REGEX = /[^a-z0-9]/g;
-const INTEGER_REGEX = /^[0-9]*$/g;
-const FLOAT_REGEX = /^[.0-9]*$/g;
+const CONTAINS_INTEGER_REGEX = /.*[0-9]+.*/g;
+const INTEGER_REGEX = /^[0-9]+$/g;
+const FLOAT_REGEX = /^[.0-9]+$/g;
 const SPACE_REGEX = /\s/g;
 const APOSTROPHE_REGEX = /[/']/g;
 const HTML_CHARACTER_REGEX = /[<>/'"]/g;
@@ -30,127 +32,26 @@ const rootFolder = path.resolve(__dirname, '..');
 // eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/no-empty-function
 const TimeoutConstructor = setTimeout(() => {}, 1).constructor;
 
-const hexColorCodes: KeyedDict<HexColor, {'background-color': string; 'background': string}> = {
-	"Red": {'background-color': '#db7070', 'background': 'linear-gradient(#db7070,#b82e2e)'},
-	"Red-Orange": {'background-color': '#db8b70', 'background': 'linear-gradient(#db8b70,#b8502e)'},
-	"Orange": {'background-color': '#dba670', 'background': 'linear-gradient(#dba670,#b8732e)'},
-	"Yellow-Orange": {'background-color': '#dbc170', 'background': 'linear-gradient(#dbc170,#b8952e)'},
-	"Yellow": {'background-color': '#dbdb70', 'background': 'linear-gradient(#dbdb70,#b8b82e)'},
-	"Yellow-Green": {'background-color': '#c1db70', 'background': 'linear-gradient(#c1db70,#95b82e)'},
-	"Green": {'background-color': '#70db70', 'background': 'linear-gradient(#70db70,#2eb82e)'},
-	"Cyan": {'background-color': '#70dbdb', 'background': 'linear-gradient(#70dbdb,#2eb8b8)'},
-	"Blue": {'background-color': '#70a6db', 'background': 'linear-gradient(#70a6db,#2e73b8)'},
-	"Blue-Violet": {'background-color': '#7070db', 'background': 'linear-gradient(#7070db,#2e2eb8)'},
-	"Violet": {'background-color': '#a670db', 'background': 'linear-gradient(#a670db,#732eb8)'},
-	"Pink": {'background-color': '#db70db', 'background': 'linear-gradient(#db70db,#b82eb8)'},
-	"Red-Violet": {'background-color': '#db70a6', 'background': 'linear-gradient(#db70a6,#b82e73)'},
-	"Brown": {'background-color': '#c68353', 'background': 'linear-gradient(#c68353,#995e33)'},
-	"Black": {'background-color': '#262626', 'background': 'linear-gradient(#262626,#1a1a1a)'},
-	"White": {'background-color': '#e6e6e6', 'background': 'linear-gradient(#e6e6e6,#d9d9d9)'},
-	"Gray": {'background-color': '#999999', 'background': 'linear-gradient(#999999,#666666)'},
-	"Light-Red": {'background-color': '#ec9393', 'background': 'linear-gradient(#ec9393,#e05252)'},
-	"Light-Red-Orange": {'background-color': '#eca993', 'background': 'linear-gradient(#eca993,#e07552)'},
-	"Light-Orange": {'background-color': '#ecbf93', 'background': 'linear-gradient(#ecbf93,#e09952)'},
-	"Light-Yellow-Orange": {'background-color': '#ecd693', 'background': 'linear-gradient(#ecd693,#e0bd52)'},
-	"Light-Yellow": {'background-color': '#ecec93', 'background': 'linear-gradient(#ecec93,#e0e052)'},
-	"Light-Yellow-Green": {'background-color': '#d6ec93', 'background': 'linear-gradient(#d6ec93,#bde052)'},
-	"Light-Green": {'background-color': '#93ec93', 'background': 'linear-gradient(#93ec93,#52e052)'},
-	"Light-Cyan": {'background-color': '#93ecec', 'background': 'linear-gradient(#93ecec,#52e0e0)'},
-	"Light-Blue": {'background-color': '#93bfec', 'background': 'linear-gradient(#93bfec,#5299e0)'},
-	"Light-Blue-Violet": {'background-color': '#9393ec', 'background': 'linear-gradient(#9393ec,#5252e0)'},
-	"Light-Violet": {'background-color': '#bf93ec', 'background': 'linear-gradient(#bf93ec,#9952e0)'},
-	"Light-Pink": {'background-color': '#ec93ec', 'background': 'linear-gradient(#ec93ec,#e052e0)'},
-	"Light-Red-Violet": {'background-color': '#ec93bf', 'background': 'linear-gradient(#ec93bf,#e05299)'},
-	"Light-Brown": {'background-color': '#e6c8b3', 'background': 'linear-gradient(#e6c8b3,#d29e79)'},
-	"Light-Gray": {'background-color': '#bfbfbf', 'background': 'linear-gradient(#bfbfbf,#a6a6a6)'},
-	"Dark-Red": {'background-color': '#ac3939', 'background': 'linear-gradient(#ac3939,#732626)'},
-	"Dark-Red-Orange": {'background-color': '#ac5639', 'background': 'linear-gradient(#ac5639,#733926)'},
-	"Dark-Yellow": {'background-color': '#acac39', 'background': 'linear-gradient(#acac39,#737326)'},
-	"Dark-Yellow-Green": {'background-color': '#8fac39', 'background': 'linear-gradient(#8fac39,#607326)'},
-	"Dark-Green": {'background-color': '#39ac39', 'background': 'linear-gradient(#39ac39,#267326)'},
-	"Dark-Cyan": {'background-color': '#39acac', 'background': 'linear-gradient(#39acac,#267373)'},
-	"Dark-Blue": {'background-color': '#3973ac', 'background': 'linear-gradient(#3973ac,#264d73)'},
-	"Dark-Blue-Violet": {'background-color': '#3939ac', 'background': 'linear-gradient(#3939ac,#262673)'},
-	"Dark-Violet": {'background-color': '#7339ac', 'background': 'linear-gradient(#7339ac,#4d2673)'},
-	"Dark-Pink": {'background-color': '#ac39ac', 'background': 'linear-gradient(#ac39ac,#732673)'},
-	"Dark-Red-Violet": {'background-color': '#ac3973', 'background': 'linear-gradient(#ac3973,#73264d)'},
-	"Dark-Brown": {'background-color': '#995c33', 'background': 'linear-gradient(#995c33,#603920)'},
-	"Dark-Gray": {'background-color': '#595959', 'background': 'linear-gradient(#595959,#404040)'},
-};
-
-const typeHexColors: Dict<HexColor> = {
-	"Normal": "White",
-	"Fire": "Red-Orange",
-	"Water": "Blue",
-	"Electric": "Yellow",
-	"Fairy": "Light-Red-Violet",
-	"Grass": "Green",
-	"Ice": "Light-Cyan",
-	"Fighting": "Dark-Red",
-	"Poison": "Violet",
-	"Ground": "Light-Brown",
-	"Flying": "Light-Gray",
-	"Psychic": "Pink",
-	"Bug": "Yellow-Green",
-	"Rock": "Brown",
-	"Ghost": "Dark-Violet",
-	"Dragon": "Blue-Violet",
-	"Steel": "Gray",
-	"Dark": "Black",
-	"???": "White",
-	"Bird": "White",
-};
-
-const pokemonColorHexColors: Dict<HexColor> = {
-	"Green": "Green",
-	"Red": "Red",
-	"Black": "Black",
-	"Blue": "Blue",
-	"White": "White",
-	"Brown": "Brown",
-	"Yellow": "Yellow",
-	"Purple": "Violet",
-	"Pink": "Pink",
-	"Gray": "Gray",
-};
-
-const eggGroupHexColors: Dict<HexColor> = {
-	"Monster": "Red",
-	"Grass": "Green",
-	"Dragon": "Blue-Violet",
-	"Water 1": "Light-Blue",
-	"Water 2": "Blue",
-	"Water 3": "Dark-Blue",
-	"Bug": "Yellow-Green",
-	"Flying": "Light-Violet",
-	"Field": "Light-Yellow-Orange",
-	"Fairy": "Light-Red-Violet",
-	"Undiscovered": "Black",
-	"Human-Like": "Light-Brown",
-	"Mineral": "Dark-Brown",
-	"Amorphous": "Gray",
-	"Ditto": "Pink",
-};
-
 export class Tools {
 	// exported constants
-	readonly eggGroupHexColors: typeof eggGroupHexColors = eggGroupHexColors;
-	readonly hexColorCodes: typeof hexColorCodes = hexColorCodes;
-	readonly typeHexColors: typeof typeHexColors = typeHexColors;
-	readonly pokemonColorHexColors: typeof pokemonColorHexColors = pokemonColorHexColors;
+	readonly battleRoomPrefix: string = BATTLE_ROOM_PREFIX;
+	readonly builtFolder: string = path.join(rootFolder, 'built');
+	readonly eggGroupHexCodes: typeof eggGroupHexCodes = eggGroupHexCodes;
+	readonly groupchatPrefix: string = GROUPCHAT_PREFIX;
+	readonly hexCodes: typeof hexCodes = hexCodes;
+	readonly letters: string = "abcdefghijklmnopqrstuvwxyz";
 	readonly mainServer: string = 'play.pokemonshowdown.com';
 	readonly maxMessageLength: typeof maxMessageLength = maxMessageLength;
 	readonly maxUsernameLength: typeof maxUsernameLength = maxUsernameLength;
-	readonly rootFolder: typeof rootFolder = rootFolder;
+	readonly pokemonColorHexCodes: typeof pokemonColorHexCodes = pokemonColorHexCodes;
 	readonly pokemonShowdownFolder: string = path.join(rootFolder, 'pokemon-showdown');
-	readonly letters: string = "abcdefghijklmnopqrstuvwxyz";
-	readonly unsafeApiCharacterRegex: RegExp = UNSAFE_API_CHARACTER_REGEX;
-	readonly battleRoomPrefix: string = BATTLE_ROOM_PREFIX;
-	readonly groupchatPrefix: string = GROUPCHAT_PREFIX;
+	readonly rootFolder: typeof rootFolder = rootFolder;
 	readonly smogonDexPrefix: string = SMOGON_DEX_PREFIX;
-	readonly smogonThreadsPrefix: string = SMOGON_THREADS_PREFIX;
-	readonly smogonPostsPrefix: string = SMOGON_POSTS_PREFIX;
 	readonly smogonPostPermalinkPrefix: string = SMOGON_POST_PERMALINK_PREFIX;
+	readonly smogonPostsPrefix: string = SMOGON_POSTS_PREFIX;
+	readonly smogonThreadsPrefix: string = SMOGON_THREADS_PREFIX;
+	readonly typeHexCodes: typeof typeHexCodes = typeHexCodes;
+	readonly unsafeApiCharacterRegex: RegExp = UNSAFE_API_CHARACTER_REGEX;
 
 	lastGithubApiCall: number = 0;
 
@@ -163,15 +64,35 @@ export class Tools {
 		}
 	}
 
-	logError(error: Error): void {
+	getNamedHexCode(name: NamedHexCode): IHexCodeData {
+		return hexCodes[namedHexCodes[name]];
+	}
+
+	getEggGroupHexCode(eggGroup: string): IHexCodeData {
+		return hexCodes[eggGroupHexCodes[eggGroup]];
+	}
+
+	getPokemonColorHexCode(color: string): IHexCodeData {
+		return hexCodes[pokemonColorHexCodes[color]];
+	}
+
+	getTypeHexCode(type: string): IHexCodeData {
+		return hexCodes[typeHexCodes[type]];
+	}
+
+	logError(error: Error, message?: string): void {
+		this.logMessage((message ? message + "\n" : "") + (error.stack || error.message));
+	}
+
+	logMessage(message: string): void {
 		const date = new Date();
 		const month = date.getMonth() + 1;
 		const day = date.getDate();
 		const year = date.getFullYear();
 		const filepath = year + '-' + month + '-' + day + '.txt';
 
-		fs.appendFileSync(path.join(rootFolder, 'errors', filepath), date.toUTCString() + " " + date.toTimeString() + "\n" +
-			(error.stack || error.message) + "\n");
+		fs.appendFileSync(path.join(rootFolder, 'errors', filepath), "\n" + date.toUTCString() + " " + date.toTimeString() + "\n" +
+			message + "\n");
 	}
 
 	random(limit?: number, prng?: PRNG): number {
@@ -419,7 +340,7 @@ export class Tools {
 		return input.replace(HTML_CHARACTER_REGEX, '');
 	}
 
-	joinList(list: string[], preFormatting?: string | null, postFormatting?: string | null, conjunction?: string): string {
+	joinList(list: readonly string[], preFormatting?: string | null, postFormatting?: string | null, conjunction?: string): string {
 		let len = list.length;
 		if (!len) return "";
 		if (!preFormatting) preFormatting = "";
@@ -518,6 +439,13 @@ export class Tools {
 		return extracted;
 	}
 
+	containsInteger(text: string): boolean {
+		text = text.trim();
+		if (text.startsWith('-')) text = text.substr(1);
+		if (text === '') return false;
+		return !!text.match(CONTAINS_INTEGER_REGEX);
+	}
+
 	isInteger(text: string): boolean {
 		text = text.trim();
 		if (text.startsWith('-')) text = text.substr(1);
@@ -581,7 +509,7 @@ export class Tools {
 		}
 	}
 
-	getPermutations<T>(elements: T[], minimumLength?: number, maximumLength?: number): T[][] {
+	getPermutations<T>(elements: readonly T[], minimumLength?: number, maximumLength?: number): T[][] {
 		const length = elements.length;
 
 		if (minimumLength === undefined) {
@@ -744,32 +672,48 @@ export class Tools {
 		return linkB;
 	}
 
-	extractBattleId(message: string, replayServerAddress: string, serverAddress: string, serverId: string): string | null {
+	extractBattleId(message: string, replayServerAddress: string, serverAddress: string, serverId: string): IExtractedBattleId | null {
 		message = message.trim();
 		if (!message) return null;
 
+		let fullBattleId = "";
 		const replayServerLink = replayServerAddress + (replayServerAddress.endsWith("/") ? "" : "/");
 		const replayServerLinkIndex = message.indexOf(replayServerLink);
 		if (replayServerLinkIndex !== -1) {
 			message = message.substr(replayServerLinkIndex + replayServerLink.length).trim();
 			if (message) {
 				if (serverId !== 'showdown' && message.startsWith(serverId + "-")) message = message.substr(serverId.length + 1);
-				return message.startsWith(BATTLE_ROOM_PREFIX) ? message : BATTLE_ROOM_PREFIX + message;
+				fullBattleId = message.startsWith(BATTLE_ROOM_PREFIX) ? message : BATTLE_ROOM_PREFIX + message;
+			} else {
+				return null;
 			}
-			return null;
 		}
 
-		const serverLink = serverAddress + (serverAddress.endsWith("/") ? "" : "/");
-		const serverLinkIndex = message.indexOf(serverLink);
-		if (serverLinkIndex !== -1) {
-			message = message.substr(serverLinkIndex + serverLink.length).trim();
-			if (message.startsWith(BATTLE_ROOM_PREFIX)) return message;
-			return null;
+		if (!fullBattleId) {
+			const serverLink = serverAddress + (serverAddress.endsWith("/") ? "" : "/");
+			const serverLinkIndex = message.indexOf(serverLink);
+			if (serverLinkIndex !== -1) {
+				message = message.substr(serverLinkIndex + serverLink.length).trim();
+				if (message.startsWith(BATTLE_ROOM_PREFIX)) {
+					fullBattleId = message;
+				} else {
+					return null;
+				}
+			}
+
+			if (!fullBattleId && message.startsWith(BATTLE_ROOM_PREFIX)) fullBattleId = message;
 		}
 
-		if (message.startsWith(BATTLE_ROOM_PREFIX)) return message;
+		if (!fullBattleId) return null;
 
-		return null;
+		const parts = fullBattleId.split("-");
+
+		return {
+			format: parts[1],
+			fullId: fullBattleId,
+			publicId: parts.slice(0, 3).join("-"),
+			password: parts.slice(3).join("-"),
+		};
 	}
 
 	getChallongeUrl(input: string): string | undefined {

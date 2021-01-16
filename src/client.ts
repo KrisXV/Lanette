@@ -1,19 +1,20 @@
+import fs = require('fs');
 import https = require('https');
+import path = require('path');
 import querystring = require('querystring');
 import url = require('url');
 
 import type { ClientOptions, Data } from 'ws';
-import type { Player } from './room-activity';
 import type { ScriptedGame } from './room-game-scripted';
 import type { UserHostedGame } from './room-game-user-hosted';
 import type { Room } from './rooms';
 import type {
-	GroupName, IClientMessageTypes, ILoginOptions, IOutgoingMessage, IRoomInfoResponse, IRoomsResponse, IServerConfig, IServerGroup,
-	ITournamentMessageTypes, IUserDetailsResponse, QueryResponseType, ServerGroupData
+	GroupName, IClientMessageTypes, ILoginOptions, IMessageParserFile, IOutgoingMessage, IRoomInfoResponse, IRoomsResponse,
+	IServerConfig, IServerGroup, ITournamentMessageTypes, IUserDetailsResponse, QueryResponseType, ServerGroupData
 } from './types/client';
 import type { ISeparatedCustomRules } from './types/dex';
-import type { IParseMessagePlugin } from './types/plugins';
 import type { RoomType } from './types/rooms';
+import type { IExtractedBattleId } from './types/tools';
 import type { ITournamentEndJson, ITournamentUpdateJson } from './types/tournaments';
 import type { User } from './users';
 
@@ -26,7 +27,7 @@ const TRUSTED_MESSAGE_THROTTLE = 100;
 const SERVER_THROTTLE_BUFFER_LIMIT = 6;
 const MAX_MESSAGE_SIZE = 100 * 1024;
 const BOT_GREETING_COOLDOWN = 6 * 60 * 60 * 1000;
-const SERVER_LATENCY_INTERVAL = 30 * 1000;
+const SERVER_LATENCY_INTERVAL = 20 * 1000;
 const ASSUMED_SERVER_LATENCY = 1;
 const ASSUMED_SERVER_PROCESSING_TIME = 1;
 const INVITE_COMMAND = '/invite ';
@@ -155,7 +156,11 @@ function constructEvasionRegex(str: string): RegExp {
 	const buf = "\\b" +
 		[...str].map(letter => (EVASION_DETECTION_SUB_STRINGS[letter] || letter) + '+').join('\\.?') +
 		"\\b";
-	return new RegExp(buf, 'i');
+	return new RegExp(buf, 'iu');
+}
+
+function constructBannedWordRegex(bannedWords: string[]): RegExp {
+	return new RegExp('(?:\\b|(?!\\w))(?:' + bannedWords.join('|') + ')(?:\\b|\\B(?!\\w))', 'i');
 }
 
 let connectListener: (() => void) | null;
@@ -169,20 +174,24 @@ export class Client {
 	uhtmlChatCommand: typeof UHTML_CHAT_COMMAND = UHTML_CHAT_COMMAND;
 	uhtmlChangeChatCommand: typeof UHTML_CHANGE_CHAT_COMMAND = UHTML_CHANGE_CHAT_COMMAND;
 
+	battleFilterRegularExpressions: RegExp[] | null = null;
 	botGreetingCooldowns: Dict<number> = {};
 	challstr: string = '';
 	challstrTimeout: NodeJS.Timer | undefined = undefined;
+	chatFilterRegularExpressions: RegExp[] | null = null;
+	configBannedWordsRegex: RegExp | null = null;
 	connectionAttempts: number = 0;
 	connectionTimeout: NodeJS.Timer | undefined = undefined;
 	evasionFilterRegularExpressions: RegExp[] | null = null;
 	failedPingTimeout: NodeJS.Timer | null = null;
-	filterRegularExpressions: RegExp[] | null = null;
 	groupSymbols: KeyedDict<GroupName, string> = DEFAULT_GROUP_SYMBOLS;
-	incomingMessageQueue: Data[] = [];
+	incomingMessageQueue: {message: Data, timestamp: number}[] = [];
 	lastSendTimeoutTime: number = 0;
 	lastOutgoingMessage: IOutgoingMessage | null = null;
 	loggedIn: boolean = false;
 	loginTimeout: NodeJS.Timer | undefined = undefined;
+	messageParsers: IMessageParserFile[] = [];
+	messageParsersExist: boolean = false;
 	outgoingMessageQueue: IOutgoingMessage[] = [];
 	pauseIncomingMessages: boolean = true;
 	pauseOutgoingMessages: boolean = false;
@@ -207,7 +216,7 @@ export class Client {
 
 	constructor() {
 		connectListener = () => this.onConnect();
-		messageListener = (message: Data) => this.onMessage(message);
+		messageListener = (message: Data) => this.onMessage(message, Date.now());
 		errorListener = (error: Error) => this.onConnectionError(error);
 		closeListener = (code: number, description: string) => this.onConnectionClose(code, description);
 
@@ -217,7 +226,41 @@ export class Client {
 			this.server = this.server.substr(7);
 		}
 		if (this.server.endsWith('/')) this.server = this.server.substr(0, this.server.length - 1);
+
 		this.parseServerGroups();
+		this.updateConfigSettings();
+
+		const messageParsersDir = path.join(Tools.builtFolder, 'message-parsers');
+		const privateMessageParsersDir = path.join(messageParsersDir, 'private');
+
+		this.loadMessageParsersDirectory(messageParsersDir);
+		this.loadMessageParsersDirectory(privateMessageParsersDir, true);
+
+		this.messageParsers.sort((a, b) => b.priority - a.priority);
+		this.messageParsersExist = this.messageParsers.length > 0;
+	}
+
+	loadMessageParsersDirectory(directory: string, optional?: boolean): void {
+		let messageParserFiles: string[] = [];
+		try {
+			messageParserFiles = fs.readdirSync(directory);
+		} catch (e) {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+			if (e.code === 'ENOENT' && optional) return;
+			throw e;
+		}
+
+		for (const fileName of messageParserFiles) {
+			if (!fileName.endsWith('.js') || fileName === 'example.js') continue;
+			const filePath = path.join(directory, fileName);
+			// eslint-disable-next-line @typescript-eslint/no-var-requires
+			const messageParser = require(filePath) as IMessageParserFile;
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+			if (!messageParser.parseMessage) throw new Error("No parseMessage function exported from " + filePath);
+
+			if (!messageParser.priority) messageParser.priority = 0;
+			this.messageParsers.push(messageParser);
+		}
 	}
 
 	setClientListeners(): void {
@@ -274,10 +317,16 @@ export class Client {
 
 			if (this.reloadInProgress || this !== global.Client) return;
 
+			const oldServerLatency = this.lastOutgoingMessage ? this.lastOutgoingMessage.serverLatency : this.serverLatency;
 			if (pingTime) {
 				this.serverLatency = Math.ceil((Date.now() - pingTime) / 2) || ASSUMED_SERVER_LATENCY;
 			} else {
 				this.serverLatency = ASSUMED_SERVER_LATENCY;
+			}
+
+			if (this.sendTimeout && this.sendTimeout !== true && oldServerLatency && this.serverLatency > oldServerLatency) {
+				this.clearSendTimeout();
+				this.setSendTimeout(this.getSendThrottle() + (this.serverLatency - oldServerLatency));
 			}
 		};
 
@@ -309,15 +358,15 @@ export class Client {
 			this.pingServer();
 
 			if (previous.incomingMessageQueue) {
-				for (const message of previous.incomingMessageQueue.slice()) {
-					if (!this.incomingMessageQueue.includes(message)) this.onMessage(message);
+				for (const item of previous.incomingMessageQueue.slice()) {
+					if (!this.incomingMessageQueue.includes(item)) this.onMessage(item.message, item.timestamp);
 				}
 			}
 
 			this.pauseIncomingMessages = false;
 			if (this.incomingMessageQueue.length) {
-				for (const message of this.incomingMessageQueue) {
-					this.onMessage(message);
+				for (const item of this.incomingMessageQueue) {
+					this.onMessage(item.message, item.timestamp);
 				}
 
 				this.incomingMessageQueue = [];
@@ -326,7 +375,8 @@ export class Client {
 
 		if (previous.botGreetingCooldowns) Object.assign(this.botGreetingCooldowns, previous.botGreetingCooldowns);
 		if (previous.challstr) this.challstr = previous.challstr;
-		if (previous.filterRegularExpressions) this.filterRegularExpressions = previous.filterRegularExpressions.slice();
+		if (previous.battleFilterRegularExpressions) this.battleFilterRegularExpressions = previous.battleFilterRegularExpressions.slice();
+		if (previous.chatFilterRegularExpressions) this.chatFilterRegularExpressions = previous.chatFilterRegularExpressions.slice();
 		if (previous.evasionFilterRegularExpressions) {
 			this.evasionFilterRegularExpressions = previous.evasionFilterRegularExpressions.slice();
 		}
@@ -482,6 +532,8 @@ export class Client {
 			Users.removeAll();
 			this.outgoingMessageQueue = [];
 		} else {
+			Tools.logMessage("Client.reconnect() called");
+
 			this.roomsToRejoin = Rooms.getRoomIds();
 			if (Config.rooms && !Config.rooms.includes('lobby')) {
 				const index = this.roomsToRejoin.indexOf('lobby');
@@ -515,15 +567,14 @@ export class Client {
 		this.connect();
 	}
 
-	onMessage(webSocketData: Data): void {
+	onMessage(webSocketData: Data, now: number): void {
 		if (!webSocketData || typeof webSocketData !== 'string') return;
 
 		if (this.pauseIncomingMessages) {
-			this.incomingMessageQueue.push(webSocketData);
+			this.incomingMessageQueue.push({message: webSocketData, timestamp: now});
 			return;
 		}
 
-		const now = Date.now();
 		const lines = webSocketData.split("\n");
 		let room: Room;
 		if (lines[0].startsWith('>')) {
@@ -589,10 +640,9 @@ export class Client {
 
 		const messageParts = message.split("|");
 
-		if (ParseMessagePlugins) {
-			for (const pluginName of ParseMessagePlugins) {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-				if (((global as any)[pluginName] as IParseMessagePlugin).parseMessage(room, messageType, messageParts) === true) return;
+		if (this.messageParsersExist) {
+			for (const messageParser of this.messageParsers) {
+				if (messageParser.parseMessage(room, messageType, messageParts, now) === true) return;
 			}
 		}
 
@@ -757,9 +807,35 @@ export class Client {
 			break;
 		}
 
-		case 'noinit':
 		case 'deinit': {
 			Rooms.remove(room);
+			break;
+		}
+
+		case 'noinit': {
+			const messageArguments: IClientMessageTypes['noinit'] = {
+				action: messageParts[0],
+				newId: messageParts[1],
+				newTitle: messageParts[2],
+			};
+
+			if (messageArguments.action === 'rename') {
+				const oldId = room.id;
+				Rooms.renameRoom(room, messageArguments.newId, messageArguments.newTitle);
+				Storage.renameRoom(room, oldId);
+			} else {
+				Rooms.remove(room);
+			}
+
+			break;
+		}
+
+		case 'title': {
+			const messageArguments: IClientMessageTypes['title'] = {
+				title: messageParts[0],
+			};
+
+			room.setTitle(messageArguments.title);
 			break;
 		}
 
@@ -825,12 +901,7 @@ export class Client {
 
 			const user = Users.add(username, id);
 			room.onUserJoin(user, messageArguments.rank);
-			if (status || user.status) user.status = status;
-			if (away) {
-				user.away = true;
-			} else if (user.away) {
-				user.away = false;
-			}
+			user.updateStatus(status, away);
 
 			if (user === Users.self && this.publicChatRooms.includes(room.id) && Users.self.hasRank(room, 'driver')) {
 				this.sendThrottle = TRUSTED_MESSAGE_THROTTLE;
@@ -842,7 +913,6 @@ export class Client {
 				now - this.botGreetingCooldowns[user.id] >= BOT_GREETING_COOLDOWN)) {
 				if (Storage.checkBotGreeting(room, user, now)) this.botGreetingCooldowns[user.id] = now;
 			}
-			if (room.game && room.game.onUserJoinRoom) room.game.onUserJoinRoom(room, user);
 			break;
 		}
 
@@ -853,6 +923,7 @@ export class Client {
 				possibleRank: messageParts[0].charAt(0),
 				username: messageParts[0].substr(1),
 			};
+
 			let rank: string | undefined;
 			let username: string;
 			if (messageArguments.possibleRank in this.serverGroups) {
@@ -887,19 +958,12 @@ export class Client {
 
 			const {away, status, username} = Tools.parseUsernameText(messageArguments.usernameText);
 			const user = Users.rename(username, messageArguments.oldId);
-			if (status || user.status) user.status = status;
-			if (away) {
-				user.away = true;
-			} else if (user.away) {
-				user.away = false;
-			}
+			room.onUserJoin(user, messageArguments.rank, true);
+			user.updateStatus(status, away);
 
 			if (!user.away && Config.allowMail && messageArguments.rank !== this.groupSymbols.locked) {
 				Storage.retrieveOfflineMessages(user);
 			}
-
-			const roomData = user.rooms.get(room);
-			room.onUserJoin(user, messageArguments.rank, roomData ? roomData.lastChatMessage : undefined);
 
 			Storage.updateLastSeen(user, now);
 			break;
@@ -944,7 +1008,7 @@ export class Client {
 					room.addHtmlChatLog(html);
 
 					if (htmlId in room.htmlMessageListeners) {
-						room.htmlMessageListeners[htmlId]();
+						room.htmlMessageListeners[htmlId](now);
 						delete room.htmlMessageListeners[htmlId];
 					}
 				} else {
@@ -959,35 +1023,35 @@ export class Client {
 
 					const commaIndex = uhtml.indexOf(',');
 					if (commaIndex !== -1) {
-						const name = uhtml.substr(0, commaIndex);
+						const uhtmlName = uhtml.substr(0, commaIndex);
+						const uhtmlId = Tools.toId(uhtmlName);
 						const html = Tools.unescapeHTML(uhtml.substr(commaIndex + 1));
 						const htmlId = Tools.toId(html);
 						if (this.lastOutgoingMessage && this.lastOutgoingMessage.type === 'uhtml' &&
-							Tools.toId(this.lastOutgoingMessage.uhtmlName) === name &&
+							Tools.toId(this.lastOutgoingMessage.uhtmlName) === uhtmlId &&
 							Tools.toId(this.lastOutgoingMessage.html) === htmlId) {
 							this.clearLastOutgoingMessage(now);
 						}
 
-						if (!uhtmlChange) room.addUhtmlChatLog(name, html);
+						if (!uhtmlChange) room.addUhtmlChatLog(uhtmlName, html);
 
-						const uhtmlId = Tools.toId(name);
 						if (uhtmlId in room.uhtmlMessageListeners) {
 							if (htmlId in room.uhtmlMessageListeners[uhtmlId]) {
-								room.uhtmlMessageListeners[uhtmlId][htmlId]();
+								room.uhtmlMessageListeners[uhtmlId][htmlId](now);
 								delete room.uhtmlMessageListeners[uhtmlId][htmlId];
 							}
 						}
 					} else {
+						const messageId = Tools.toId(messageArguments.message);
 						if (this.lastOutgoingMessage && this.lastOutgoingMessage.type === 'chat' &&
-							this.lastOutgoingMessage.text === messageArguments.message) {
+							Tools.toId(this.lastOutgoingMessage.text) === messageId) {
 							this.clearLastOutgoingMessage(now);
 						}
 
 						room.addChatLog(messageArguments.message);
 
-						const messageId = Tools.toId(messageArguments.message);
 						if (messageId in room.messageListeners) {
-							room.messageListeners[messageId]();
+							room.messageListeners[messageId](now);
 							delete room.messageListeners[messageId];
 						}
 					}
@@ -1043,23 +1107,23 @@ export class Client {
 				if (isUhtml || isUhtmlChange) {
 					const uhtml = messageArguments.message.substr(messageArguments.message.indexOf(" ") + 1);
 					const commaIndex = uhtml.indexOf(",");
-					const name = uhtml.substr(0, commaIndex);
-					const uhtmlId = Tools.toId(name);
+					const uhtmlName = uhtml.substr(0, commaIndex);
+					const uhtmlId = Tools.toId(uhtmlName);
 					const html = Tools.unescapeHTML(uhtml.substr(commaIndex + 1));
 					const htmlId = Tools.toId(html);
 
 					if (this.lastOutgoingMessage && this.lastOutgoingMessage.type === 'pmuhtml' &&
-						this.lastOutgoingMessage.user === recipient.id && Tools.toId(this.lastOutgoingMessage.uhtmlName) === name &&
+						this.lastOutgoingMessage.user === recipient.id && Tools.toId(this.lastOutgoingMessage.uhtmlName) === uhtmlId &&
 						Tools.toId(this.lastOutgoingMessage.html) === htmlId) {
 						this.clearLastOutgoingMessage(now);
 					}
 
-					if (!isUhtmlChange) user.addUhtmlChatLog(name, html);
+					if (!isUhtmlChange) user.addUhtmlChatLog(uhtmlName, html);
 
 					if (recipient.uhtmlMessageListeners) {
 						if (uhtmlId in recipient.uhtmlMessageListeners) {
 							if (htmlId in recipient.uhtmlMessageListeners[uhtmlId]) {
-								recipient.uhtmlMessageListeners[uhtmlId][htmlId]();
+								recipient.uhtmlMessageListeners[uhtmlId][htmlId](now);
 								delete recipient.uhtmlMessageListeners[uhtmlId][htmlId];
 							}
 						}
@@ -1076,22 +1140,23 @@ export class Client {
 
 					if (recipient.htmlMessageListeners) {
 						if (htmlId in recipient.htmlMessageListeners) {
-							recipient.htmlMessageListeners[htmlId]();
+							recipient.htmlMessageListeners[htmlId](now);
 							delete recipient.htmlMessageListeners[htmlId];
 						}
 					}
 				} else {
+					const messageId = Tools.toId(messageArguments.message);
 					if (this.lastOutgoingMessage && this.lastOutgoingMessage.type === 'pm' &&
-						this.lastOutgoingMessage.user === recipient.id && this.lastOutgoingMessage.text === messageArguments.message) {
+						this.lastOutgoingMessage.user === recipient.id &&
+						Tools.toId(this.lastOutgoingMessage.text) === messageId) {
 						this.clearLastOutgoingMessage(now);
 					}
 
 					user.addChatLog(messageArguments.message);
 
 					if (recipient.messageListeners) {
-						const messageId = Tools.toId(messageArguments.message);
 						if (messageId in recipient.messageListeners) {
-							recipient.messageListeners[messageId]();
+							recipient.messageListeners[messageId](now);
 							delete recipient.messageListeners[messageId];
 						}
 					}
@@ -1108,11 +1173,11 @@ export class Client {
 					const battleUrl = this.extractBattleId(commandMessage.startsWith(INVITE_COMMAND) ?
 						commandMessage.substr(INVITE_COMMAND.length) : commandMessage);
 					if (battleUrl) {
-						commandMessage = Config.commandCharacter + 'check ' + battleUrl;
+						commandMessage = Config.commandCharacter + 'check ' + battleUrl.fullId;
 					}
 
 					if (messageArguments.rank !== this.groupSymbols.locked) {
-						CommandParser.parse(user, user, commandMessage);
+						CommandParser.parse(user, user, commandMessage, now);
 					}
 				}
 			}
@@ -1130,7 +1195,10 @@ export class Client {
 				subMessage = subMessage.substr(colonIndex + 2);
 				if (subMessage) {
 					const bannedWordsRoom = Rooms.get(roomId);
-					if (bannedWordsRoom) bannedWordsRoom.bannedWords = subMessage.split(', ');
+					if (bannedWordsRoom) {
+						bannedWordsRoom.serverBannedWords = subMessage.split(', ');
+						bannedWordsRoom.serverBannedWordsRegex = null;
+					}
 				}
 			}
 			break;
@@ -1146,22 +1214,29 @@ export class Client {
 
 			const htmlId = Tools.toId(messageArguments.html);
 			if (htmlId in room.htmlMessageListeners) {
-				room.htmlMessageListeners[htmlId]();
+				room.htmlMessageListeners[htmlId](now);
 				delete room.htmlMessageListeners[htmlId];
 			}
 
 			if (messageArguments.html === '<strong class="message-throttle-notice">Your message was not sent because you\'ve been ' +
 				'typing too quickly.</strong>') {
 				this.clearSendTimeout();
+
+				Tools.logMessage("Typing too quickly; Client.sendThrottle = " + this.sendThrottle + "; Client.serverLatency = " +
+					this.serverLatency + "; Client.serverProcessingTime = " + this.serverProcessingTime + "; " +
+					"Client.outgoingMessageQueue.length = " + this.outgoingMessageQueue.length +
+					(this.lastOutgoingMessage ? "; Client.lastOutgoingMessage = " + JSON.stringify(this.lastOutgoingMessage) : ""));
+
 				if (this.lastOutgoingMessage) {
 					this.outgoingMessageQueue.unshift(this.lastOutgoingMessage);
-					this.clearLastOutgoingMessage(now);
+					this.clearLastOutgoingMessage(this.lastOutgoingMessage.measure ? now : undefined);
 				}
 				this.setSendTimeout(this.getSendThrottle() * SERVER_THROTTLE_BUFFER_LIMIT);
 			} else if (messageArguments.html.startsWith('<div class="broadcast-red"><strong>Moderated chat was set to ')) {
 				room.modchat = messageArguments.html.split('<div class="broadcast-red">' +
 					'<strong>Moderated chat was set to ')[1].split('!</strong>')[0];
-			} else if (messageArguments.html.startsWith('<div class="broadcast-red"><strong>This battle is invite-only!</strong>')) {
+			} else if (messageArguments.html.startsWith('<div class="broadcast-red"><strong>This battle is invite-only!</strong>') ||
+				messageArguments.html.startsWith('<div class="broadcast-red"><strong>This room is now invite only!</strong>')) {
 				room.inviteOnlyBattle = true;
 			} else if (messageArguments.html.startsWith('<div class="broadcast-blue"><strong>Moderated chat was disabled!</strong>')) {
 				room.modchat = 'off';
@@ -1214,7 +1289,8 @@ export class Client {
 
 		case 'pagehtml': {
 			if (room.id === 'view-filters') {
-				let filterRegularExpressions: RegExp[] | null = null;
+				let battleFilterRegularExpressions: RegExp[] | null = null;
+				let chatFilterRegularExpressions: RegExp[] | null = null;
 				let evasionFilterRegularExpressions: RegExp[] | null = null;
 				const messageArguments: IClientMessageTypes['pagehtml'] = {
 					html: Tools.unescapeHTML(messageParts.join("|")),
@@ -1225,6 +1301,7 @@ export class Client {
 					let currentHeader = '';
 					let shortener = false;
 					let evasion = false;
+					let battleFilter = false;
 
 					for (const row of rows) {
 						if (!row) continue;
@@ -1232,7 +1309,9 @@ export class Client {
 							currentHeader = row.split('<th colspan="2"><h3>')[1].split('</h3>')[0].split(' <span ')[0];
 							shortener = currentHeader === 'URL Shorteners';
 							evasion = currentHeader === 'Filter Evasion Detection';
-						} else if (row.startsWith('<td><abbr') && currentHeader !== 'Whitelisted names') {
+							battleFilter = currentHeader === 'Filtered in battles';
+						} else if (row.startsWith('<td><abbr') && currentHeader !== 'Whitelisted names' &&
+							currentHeader !== 'Filtered in names') {
 							const word = row.split('<code>')[1].split('</code>')[0].trim();
 
 							let replacementWord = row.split("</abbr>")[1];
@@ -1245,7 +1324,7 @@ export class Client {
 								if (evasion) {
 									regularExpression = constructEvasionRegex(word);
 								} else {
-									regularExpression = new RegExp(shortener ? '\\b' + word : word, hasReplacement ? 'ig' : 'i');
+									regularExpression = new RegExp(shortener ? '\\b' + word : word, hasReplacement ? 'igu' : 'iu');
 								}
 							} catch (e) {
 								console.log(e);
@@ -1256,16 +1335,20 @@ export class Client {
 								if (evasion) {
 									if (!evasionFilterRegularExpressions) evasionFilterRegularExpressions = [];
 									evasionFilterRegularExpressions.push(regularExpression);
+								} else if (battleFilter) {
+									if (!battleFilterRegularExpressions) battleFilterRegularExpressions = [];
+									battleFilterRegularExpressions.push(regularExpression);
 								} else {
-									if (!filterRegularExpressions) filterRegularExpressions = [];
-									filterRegularExpressions.push(regularExpression);
+									if (!chatFilterRegularExpressions) chatFilterRegularExpressions = [];
+									chatFilterRegularExpressions.push(regularExpression);
 								}
 							}
 						}
 					}
 				}
 
-				this.filterRegularExpressions = filterRegularExpressions;
+				this.battleFilterRegularExpressions = battleFilterRegularExpressions;
+				this.chatFilterRegularExpressions = chatFilterRegularExpressions;
 				this.evasionFilterRegularExpressions = evasionFilterRegularExpressions;
 			}
 			break;
@@ -1284,7 +1367,7 @@ export class Client {
 			if (id in room.uhtmlMessageListeners) {
 				const htmlId = Tools.toId(messageArguments.html);
 				if (htmlId in room.uhtmlMessageListeners[id]) {
-					room.uhtmlMessageListeners[id][htmlId]();
+					room.uhtmlMessageListeners[id][htmlId](now);
 					delete room.uhtmlMessageListeners[id][htmlId];
 				}
 			}
@@ -1415,6 +1498,7 @@ export class Client {
 					usernameB: messageParts[1],
 					roomid: messageParts[2],
 				};
+
 				room.tournament.onBattleStart(messageArguments.usernameA, messageArguments.usernameB, messageArguments.roomid);
 				break;
 			}
@@ -1432,6 +1516,7 @@ export class Client {
 					recorded: messageParts[4] as 'success' | 'fail',
 					roomid: messageParts[5],
 				};
+
 				room.tournament.onBattleEnd(messageArguments.usernameA, messageArguments.usernameB, messageArguments.score,
 					messageArguments.roomid);
 				break;
@@ -1450,16 +1535,7 @@ export class Client {
 			};
 
 			if (room.tournament) {
-				const userId = Tools.toId(messageArguments.username);
-				if (userId in room.tournament.players) {
-					if (!(room.id in room.tournament.battleData)) {
-						room.tournament.battleData[room.id] = {
-							remainingPokemon: {},
-							slots: new Map<Player, string>(),
-						};
-					}
-					room.tournament.battleData[room.id].slots.set(room.tournament.players[userId], messageArguments.slot);
-				}
+				room.tournament.onBattlePlayer(room, messageArguments.slot, messageArguments.username);
 			}
 
 			if (room.game) {
@@ -1475,7 +1551,7 @@ export class Client {
 			};
 
 			if (room.tournament) {
-				room.tournament.battleData[room.id].remainingPokemon[messageArguments.slot] = messageArguments.size;
+				room.tournament.onBattleTeamSize(room, messageArguments.slot, messageArguments.size);
 			}
 
 			if (room.game) {
@@ -1526,7 +1602,7 @@ export class Client {
 			};
 
 			if (room.tournament) {
-				room.tournament.battleData[room.id].remainingPokemon[messageArguments.pokemon.substr(0, 2)]--;
+				room.tournament.onBattleFaint(room, messageArguments.pokemon);
 			}
 
 			if (room.game) {
@@ -1575,7 +1651,7 @@ export class Client {
 	}
 
 	parseChatMessage(room: Room, user: User, message: string, now: number): void {
-		CommandParser.parse(room, user, message);
+		CommandParser.parse(room, user, message, now);
 
 		const lowerCaseMessage = message.toLowerCase();
 
@@ -1583,7 +1659,7 @@ export class Client {
 		if (room.unlinkTournamentReplays && room.tournament && !room.tournament.format.team &&
 			lowerCaseMessage.includes(this.replayServerAddress) && !user.hasRank(room, 'voice')) {
 			const battle = this.extractBattleId(lowerCaseMessage);
-			if (battle && room.tournament.battleRooms.includes(battle)) {
+			if (battle && room.tournament.battleRooms.includes(battle.publicId)) {
 				room.sayCommand("/warn " + user.name + ", Please do not link to tournament battles");
 			}
 		}
@@ -1592,7 +1668,7 @@ export class Client {
 		if (room.game && room.game.battleData && room.game.battleRooms && (lowerCaseMessage.includes(this.replayServerAddress) ||
 			lowerCaseMessage.includes(this.server)) && !user.hasRank(room, 'voice')) {
 			const battle = this.extractBattleId(lowerCaseMessage);
-			if (battle && room.game.battleRooms.includes(battle)) {
+			if (battle && room.game.battleRooms.includes(battle.publicId)) {
 				room.sayCommand("/warn " + user.name + ", Please do not link to game battles");
 			}
 		}
@@ -1681,14 +1757,24 @@ export class Client {
 		}
 	}
 
-	willBeFiltered(message: string, room?: Room): boolean {
+	updateConfigSettings(): void {
+		if (Config.bannedWords && Config.bannedWords.length) this.configBannedWordsRegex = constructBannedWordRegex(Config.bannedWords);
+	}
+
+	checkFilters(message: string, room?: Room): string | undefined {
 		let lowerCase = message.replace(/\u039d/g, 'N').toLowerCase().replace(/[\u200b\u007F\u00AD\uDB40\uDC00\uDC21]/gu, '')
 			.replace(/\u03bf/g, 'o').replace(/\u043e/g, 'o').replace(/\u0430/g, 'a').replace(/\u0435/g, 'e').replace(/\u039d/g, 'e');
 		lowerCase = lowerCase.replace(/__|\*\*|``|\[\[|\]\]/g, '');
 
-		if (this.filterRegularExpressions) {
-			for (const expression of this.filterRegularExpressions) {
-				if (lowerCase.match(expression)) return true;
+		if (this.battleFilterRegularExpressions && room && room.type === 'battle') {
+			for (const expression of this.battleFilterRegularExpressions) {
+				if (lowerCase.match(expression)) return "battle filter";
+			}
+		}
+
+		if (this.chatFilterRegularExpressions) {
+			for (const expression of this.chatFilterRegularExpressions) {
+				if (lowerCase.match(expression)) return "chat filter";
 			}
 		}
 
@@ -1696,18 +1782,27 @@ export class Client {
 			let evasionLowerCase = lowerCase.normalize('NFKC');
 			evasionLowerCase = evasionLowerCase.replace(/[\s-_,.]+/g, '.');
 			for (const expression of this.evasionFilterRegularExpressions) {
-				if (evasionLowerCase.match(expression)) return true;
+				if (evasionLowerCase.match(expression)) return "evasion filter";
 			}
 		}
 
-		if (room && room.bannedWords) {
-			if (!room.bannedWordsRegex) {
-				room.bannedWordsRegex = new RegExp('(?:\\b|(?!\\w))(?:' + room.bannedWords.join('|') + ')(?:\\b|\\B(?!\\w))', 'gi');
+		if (room) {
+			if (room.configBannedWords) {
+				if (!room.configBannedWordsRegex) {
+					room.configBannedWordsRegex = constructBannedWordRegex(room.configBannedWords);
+				}
+				if (message.match(room.configBannedWordsRegex)) return "config room banned words";
 			}
-			if (message.match(room.bannedWordsRegex)) return true;
+
+			if (room.serverBannedWords) {
+				if (!room.serverBannedWordsRegex) {
+					room.serverBannedWordsRegex = constructBannedWordRegex(room.serverBannedWords);
+				}
+				if (message.match(room.serverBannedWordsRegex)) return "server room banned words";
+			}
 		}
 
-		return false;
+		if (this.configBannedWordsRegex && message.match(this.configBannedWordsRegex)) return "config banned words";
 	}
 
 	getListenerHtml(html: string, inPm?: boolean): string {
@@ -1735,7 +1830,7 @@ export class Client {
 		return this.getPmUserButton(Users.self, message, label, disabled);
 	}
 
-	extractBattleId(source: string): string | null {
+	extractBattleId(source: string): IExtractedBattleId | null {
 		return Tools.extractBattleId(source, this.replayServerAddress, this.server, this.serverId);
 	}
 
@@ -1752,22 +1847,34 @@ export class Client {
 
 		this.sendTimeout = true;
 		this.webSocket.send(outgoingMessage.message, () => {
+			const now = Date.now();
 			if (this.sendTimeout === true && !this.reloadInProgress && this === global.Client) {
-				if (outgoingMessage.measure) outgoingMessage.sentTime = Date.now();
+				if (outgoingMessage.measure) outgoingMessage.sentTime = now;
+				outgoingMessage.serverLatency = this.serverLatency;
+				outgoingMessage.serverProcessingTime = this.serverProcessingTime;
 				this.lastOutgoingMessage = outgoingMessage;
+
 				this.setSendTimeout();
 			}
 		});
 	}
 
-	clearLastOutgoingMessage(responseTime: number): void {
+	clearLastOutgoingMessage(responseTime?: number): void {
 		if (this.lastOutgoingMessage) {
-			if (this.lastOutgoingMessage.measure && this.lastOutgoingMessage.sentTime) {
-				let serverProcessingTime = responseTime - this.lastOutgoingMessage.sentTime - this.serverLatency;
+			const oldServerProcessingTime = this.lastOutgoingMessage.serverProcessingTime;
+			if (this.lastOutgoingMessage.measure && this.lastOutgoingMessage.sentTime && responseTime) {
+				let serverProcessingTime = responseTime - this.lastOutgoingMessage.sentTime - (this.serverLatency * 2);
 				if (serverProcessingTime < ASSUMED_SERVER_PROCESSING_TIME) serverProcessingTime = ASSUMED_SERVER_PROCESSING_TIME;
 				this.serverProcessingTime = serverProcessingTime;
 			}
+
 			this.lastOutgoingMessage = null;
+
+			if (this.sendTimeout && this.sendTimeout !== true && oldServerProcessingTime &&
+				this.serverProcessingTime > oldServerProcessingTime) {
+				this.clearSendTimeout();
+				this.setSendTimeout(this.getSendThrottle() + (this.serverProcessingTime - oldServerProcessingTime));
+			}
 		}
 	}
 

@@ -56,10 +56,17 @@ export function load(config: typeof Config): typeof Config {
 	if (config.subRooms) config.subRooms = objectKeysToRoomId(stringArrayObjectToRoomIds(config.subRooms));
 	if (config.roomAliases) config.roomAliases = objectKeysToRoomId(stringObjectToRoomIds(config.roomAliases));
 
+	if (config.rankedGames) config.rankedGames = arrayToRoomIds(config.rankedGames);
 	if (config.allowScriptedGames) config.allowScriptedGames = arrayToRoomIds(config.allowScriptedGames);
 	if (config.allowUserHostedGames) config.allowUserHostedGames = arrayToRoomIds(config.allowUserHostedGames);
 	if (config.allowOneVsOneGames) config.allowOneVsOneGames = arrayToRoomIds(config.allowOneVsOneGames);
 	if (config.allowGameAchievements) config.allowGameAchievements = arrayToRoomIds(config.allowGameAchievements);
+	if (config.showGameTrainerCards) config.showGameTrainerCards = arrayToRoomIds(config.showGameTrainerCards);
+	if (config.gameTrainerCardRequirements) objectKeysToRoomId(config.gameTrainerCardRequirements);
+	if (config.showGameHostBoxes) config.showGameHostBoxes = arrayToRoomIds(config.showGameHostBoxes);
+	if (config.gameHostBoxRequirements) objectKeysToRoomId(config.gameHostBoxRequirements);
+	if (config.showGameScriptedBoxes) config.showGameScriptedBoxes = arrayToRoomIds(config.showGameScriptedBoxes);
+	if (config.gameScriptedBoxRequirements) objectKeysToRoomId(config.gameScriptedBoxRequirements);
 	if (config.gameCategoryCooldowns) objectKeysToRoomId(config.gameCategoryCooldowns);
 	if (config.gameCooldownTimers) objectKeysToRoomId(config.gameCooldownTimers);
 	if (config.minigameCooldownTimers) objectKeysToRoomId(config.minigameCooldownTimers);

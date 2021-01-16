@@ -7,8 +7,8 @@ import { formatLinks } from './data/format-links';
 import { locations as locationData } from './data/locations';
 import { trainerClasses } from './data/trainer-classes';
 import type {
-	CategoryData, IAlternateIconNumbers, IDataTable, IGetPossibleTeamsOptions, IGifData, ISeparatedCustomRules,
-	LocationTypes
+	CategoryData, CharacterType, IAlternateIconNumbers, IDataTable, IGetPossibleTeamsOptions, IGifData, IGifDirectionData,
+	ISeparatedCustomRules, LocationType, RegionName
 } from './types/dex';
 import type {
 	IAbility, IAbilityCopy, IFormat, IItem, IItemCopy, ILearnsetData, IMove, IMoveCopy, INature, IPokemon, IPokemonCopy,
@@ -40,7 +40,6 @@ const tagNames: Dict<string> = {
 	'pu': 'PU',
 	'zu': 'ZU',
 	'nfe': 'NFE',
-	'lcuber': 'LC Uber',
 	'lc': 'LC',
 	'cap': 'Cap',
 	'caplc': 'Cap LC',
@@ -100,10 +99,10 @@ const customRuleFormats: Dict<{banlist: string, format: string}> = {
 };
 
 const customRuleAliases: Dict<string[]> = {
-	uu: ['-All Pokemon', '+LC', '+LC Uber', '+NFE', '+ZU', '+PU', '+PUBL', '+NU', '+NUBL', '+RU', '+RUBL', '+UU'],
-	ru: ['-All Pokemon', '+LC', '+LC Uber', '+NFE', '+ZU', '+PU', '+PUBL', '+NU', '+NUBL', '+RU'],
-	nu: ['-All Pokemon', '+LC', '+LC Uber', '+NFE', '+ZU', '+PU', '+PUBL', '+NU'],
-	pu: ['-All Pokemon', '+LC', '+LC Uber', '+NFE', '+ZU', '+PU'],
+	uu: ['-All Pokemon', '+LC', '+NFE', '+ZU', '+PU', '+PUBL', '+NU', '+NUBL', '+RU', '+RUBL', '+UU'],
+	ru: ['-All Pokemon', '+LC', '+NFE', '+ZU', '+PU', '+PUBL', '+NU', '+NUBL', '+RU'],
+	nu: ['-All Pokemon', '+LC', '+NFE', '+ZU', '+PU', '+PUBL', '+NU'],
+	pu: ['-All Pokemon', '+LC', '+NFE', '+ZU', '+PU'],
 	cap: ['+CAP', '+CAP NFE', '+CAP LC'],
 	monotype: ['Same Type Clause'],
 	aaa: ['!Obtainable Abilities', '-Wonder Guard', '-Shadow Tag'],
@@ -119,13 +118,46 @@ const dexes: Dict<Dex> = {};
 
 export class Dex {
 	// exported constants
+	readonly characterTypes: CharacterType[] = ['player', 'rival', 'gymleader', 'elitefour', 'champion', 'frontierbrain', 'professor',
+		'antagonist', 'other'];
+	readonly characterTypeNames: KeyedDict<CharacterType, string> = {
+		player: "Player",
+		rival: "Rival",
+		gymleader: "Gym Leader",
+		elitefour: "Elite Four",
+		champion: "Champion",
+		frontierbrain: "Frontier Brain",
+		professor: "Professor",
+		antagonist: "Antagonist",
+		other: "Misc.",
+	};
 	readonly currentGenString: typeof CURRENT_GEN_STRING = CURRENT_GEN_STRING;
 	readonly customRuleAliases: typeof customRuleAliases = customRuleAliases;
 	readonly customRuleFormats: typeof customRuleFormats = customRuleFormats;
 	readonly defaultCustomRulesName: typeof DEFAULT_CUSTOM_RULES_NAME = DEFAULT_CUSTOM_RULES_NAME;
 	dexes: Dict<Dex> = dexes;
 	formatNamesByCustomRules: Dict<string> = {};
+	readonly locationTypes: LocationType[] = ['town', 'city', 'cave', 'forest', 'mountain', 'other'];
+	readonly locationTypeNames: KeyedDict<LocationType, string> = {
+		city: "City",
+		town: "Town",
+		cave: "Cave",
+		forest: "Forest",
+		mountain: "Mountain",
+		other: "Misc.",
+	};
 	readonly omotms: string[] = [];
+	readonly regions: RegionName[] = ['kanto', 'johto', 'hoenn', 'sinnoh', 'unova', 'kalos', 'alola', 'galar'];
+	readonly regionNames: KeyedDict<RegionName, string> = {
+		kanto: "Kanto",
+		johto: "Johto",
+		hoenn: "Hoenn",
+		sinnoh: "Sinnoh",
+		unova: "Unova",
+		kalos: "Kalos",
+		alola: "Alola",
+		galar: "Galar",
+	};
 	readonly tagNames: typeof tagNames = tagNames;
 
 	readonly clientDataDirectory: string;
@@ -144,6 +176,8 @@ export class Dex {
 	private readonly evolutionLinesCache: Dict<string[][]> = Object.create(null);
 	private readonly evolutionLinesFormesCache: Dict<Dict<string[][]>> = Object.create(null);
 	private readonly immunityCache: Dict<Dict<boolean>> = Object.create(null);
+	private readonly inverseResistancesCache: Dict<string[]> = Object.create(null);
+	private readonly inverseWeaknessesCache: Dict<string[]> = Object.create(null);
 	private readonly itemCache: Dict<IItem> = Object.create(null);
 	private itemsList: readonly IItem[] | null = null;
 	private readonly isEvolutionFamilyCache: Dict<boolean> = Object.create(null);
@@ -156,6 +190,7 @@ export class Dex {
 	private pokemonList: readonly IPokemon[] | null = null;
 	private readonly formesCache: Dict<string[]> = Object.create(null);
 	private readonly pseudoLCPokemonCache: Dict<boolean> = Object.create(null);
+	private readonly resistancesCache: Dict<string[]> = Object.create(null);
 	private readonly typeCache: Dict<ITypeData> = Object.create(null);
 	private readonly weaknessesCache: Dict<string[]> = Object.create(null);
 	/* eslint-enable */
@@ -259,22 +294,21 @@ export class Dex {
 			}
 		}
 
-		/* eslint-disable @typescript-eslint/no-var-requires */
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+		// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-member-access
 		const alternateIconNumbers = require(path.join(this.clientDataDirectory, 'alternate-icon-numbers.js'))
 			.alternateIconNumbers as IAlternateIconNumbers;
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+		// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-member-access
 		const gifData = require(path.join(this.clientDataDirectory, 'pokedex-mini.js')).BattlePokemonSprites as Dict<IGifData | undefined>;
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+		// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-member-access
 		const gifDataBW = require(path.join(this.clientDataDirectory, 'pokedex-mini-bw.js'))
 			.BattlePokemonSpritesBW as Dict<IGifData | undefined>;
 
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
 		const trainerSpriteList = require(path.join(this.clientDataDirectory, 'trainer-sprites.js')) as string[];
 		const trainerSprites: Dict<string> = {};
 		for (const trainer of trainerSpriteList) {
 			trainerSprites[Tools.toId(trainer)] = trainer;
 		}
-		/* eslint-enable */
 
 		const parsedCategories: CategoryData = categoryData;
 		const speciesList = Object.keys(parsedCategories);
@@ -570,6 +604,10 @@ export class Dex {
 		const pokemon = Tools.deepClone(this.pokemonShowdownDex.getSpecies(name));
 		if (!pokemon.exists) return undefined;
 
+		if (pokemon.forme && Tools.toId(pokemon.baseSpecies) === pokemon.spriteid) {
+			pokemon.spriteid += '-' + Tools.toId(pokemon.forme);
+		}
+
 		if (pokemon.tier === '(Uber)') {
 			pokemon.tier = 'Uber';
 		} else if (pokemon.tier === '(NU)') {
@@ -775,9 +813,9 @@ export class Dex {
 
 	getBadges(): string[] {
 		const badges: string[] = [];
-		for (const i in this.data.badges) {
-			for (const badge of this.data.badges[i]) {
-				badges.push(badge);
+		for (const region of this.regions) {
+			for (const badge of this.data.badges[region]) {
+				if (!badges.includes(badge)) badges.push(badge);
 			}
 		}
 
@@ -786,9 +824,12 @@ export class Dex {
 
 	getCharacters(): string[] {
 		const characters: string[] = [];
-		for (const i in this.data.characters) {
-			for (const character of this.data.characters[i]) {
-				characters.push(character);
+		for (const region of this.regions) {
+			const types = Object.keys(this.data.characters[region]) as CharacterType[];
+			for (const type of types) {
+				for (const character of this.data.characters[region][type]) {
+					if (!characters.includes(character)) characters.push(character);
+				}
 			}
 		}
 
@@ -797,8 +838,8 @@ export class Dex {
 
 	getLocations(): string[] {
 		const locations: string[] = [];
-		for (const region in this.data.locations) {
-			const types = Object.keys(this.data.locations[region]) as LocationTypes[];
+		for (const region of this.regions) {
+			const types = Object.keys(this.data.locations[region]) as LocationType[];
 			for (const type of types) {
 				for (const location of this.data.locations[region][type]) {
 					locations.push(location);
@@ -841,6 +882,7 @@ export class Dex {
 			this.immunityCache[sourceType][cacheKey] = false;
 			return false;
 		} else {
+			targetType = targetType as string;
 			if (!Object.prototype.hasOwnProperty.call(this.immunityCache, sourceType)) {
 				this.immunityCache[sourceType] = {};
 			} else if (Object.prototype.hasOwnProperty.call(this.immunityCache[sourceType], targetType as string)) {
@@ -894,6 +936,7 @@ export class Dex {
 			this.effectivenessCache[sourceType][cacheKey] = totalTypeMod;
 			return totalTypeMod;
 		} else {
+			targetType = targetType as string;
 			if (!Object.prototype.hasOwnProperty.call(this.effectivenessCache, sourceType)) {
 				this.effectivenessCache[sourceType] = {};
 			} else if (Object.prototype.hasOwnProperty.call(this.effectivenessCache[sourceType], targetType as string)) {
@@ -916,8 +959,6 @@ export class Dex {
 					break;
 				}
 
-				// in case of weird situations like Gravity, immunity is
-				// handled elsewhere
 				default: {
 					effectiveness = 0;
 				}
@@ -931,6 +972,14 @@ export class Dex {
 		}
 	}
 
+	/**
+	 * Returns >=1 if super-effective, <=1 if not very effective
+	 */
+	getInverseEffectiveness(source: IMove | string, target: IPokemon | string | readonly string[]): number {
+		if (this.isImmune(source, target)) return 1;
+		return this.getEffectiveness(source, target) * -1;
+	}
+
 	getWeaknesses(pokemon: IPokemon): readonly string[] {
 		const cacheKey = pokemon.types.slice().sort().join(',');
 		if (Object.prototype.hasOwnProperty.call(this.weaknessesCache, cacheKey)) return this.weaknessesCache[cacheKey];
@@ -938,36 +987,81 @@ export class Dex {
 		const weaknesses: string[] = [];
 		for (const key of this.data.typeKeys) {
 			const type = this.getExistingType(key);
-			const isImmune = this.isImmune(type.name, pokemon);
-			const effectiveness = this.getEffectiveness(type.name, pokemon);
-			if (!isImmune && effectiveness >= 1) weaknesses.push(type.name);
+			if (this.isImmune(type.name, pokemon)) continue;
+			if (this.getEffectiveness(type.name, pokemon) >= 1) weaknesses.push(type.name);
 		}
 
 		this.weaknessesCache[cacheKey] = weaknesses;
 		return weaknesses;
 	}
 
-	hasGifData(pokemon: IPokemon, generation?: 'xy' | 'bw', direction?: 'front' | 'back'): boolean {
+	getInverseWeaknesses(pokemon: IPokemon): readonly string[] {
+		const cacheKey = pokemon.types.slice().sort().join(',');
+		if (Object.prototype.hasOwnProperty.call(this.inverseWeaknessesCache, cacheKey)) return this.inverseWeaknessesCache[cacheKey];
+
+		const inverseWeaknesses: string[] = [];
+		for (const key of this.data.typeKeys) {
+			const type = this.getExistingType(key);
+			if (this.getInverseEffectiveness(type.name, pokemon) >= 1) inverseWeaknesses.push(type.name);
+		}
+
+		this.inverseWeaknessesCache[cacheKey] = inverseWeaknesses;
+		return inverseWeaknesses;
+	}
+
+	getResistances(pokemon: IPokemon): readonly string[] {
+		const cacheKey = pokemon.types.slice().sort().join(',');
+		if (Object.prototype.hasOwnProperty.call(this.resistancesCache, cacheKey)) return this.resistancesCache[cacheKey];
+
+		const resistances: string[] = [];
+		for (const key of this.data.typeKeys) {
+			const type = this.getExistingType(key);
+			if (this.isImmune(type.name, pokemon)) continue;
+			if (this.getEffectiveness(type.name, pokemon) <= -1) resistances.push(type.name);
+		}
+
+		this.resistancesCache[cacheKey] = resistances;
+		return resistances;
+	}
+
+	getInverseResistances(pokemon: IPokemon): readonly string[] {
+		const cacheKey = pokemon.types.slice().sort().join(',');
+		if (Object.prototype.hasOwnProperty.call(this.inverseResistancesCache, cacheKey)) return this.inverseResistancesCache[cacheKey];
+
+		const inverseResistances: string[] = [];
+		for (const key of this.data.typeKeys) {
+			const type = this.getExistingType(key);
+			if (this.getInverseEffectiveness(type.name, pokemon) <= -1) inverseResistances.push(type.name);
+		}
+
+		this.inverseResistancesCache[cacheKey] = inverseResistances;
+		return inverseResistances;
+	}
+
+	getGifData(pokemon: IPokemon, generation?: 'xy' | 'bw', direction?: 'front' | 'back'): IGifDirectionData | undefined {
 		if (!generation) generation = 'xy';
 		if (!direction) direction = 'front';
 		if (generation === 'bw') {
 			if (Object.prototype.hasOwnProperty.call(this.data.gifDataBW, pokemon.id) && this.data.gifDataBW[pokemon.id]![direction]) {
-				return true;
+				return this.data.gifDataBW[pokemon.id]![direction];
 			}
 		} else {
 			if (Object.prototype.hasOwnProperty.call(this.data.gifData, pokemon.id) && this.data.gifData[pokemon.id]![direction]) {
-				return true;
+				return this.data.gifData[pokemon.id]![direction];
 			}
 		}
-		return false;
+		return undefined;
+	}
+
+	hasGifData(pokemon: IPokemon, generation?: 'xy' | 'bw', direction?: 'front' | 'back'): boolean {
+		return !!this.getGifData(pokemon, generation, direction);
 	}
 
 	getPokemonGif(pokemon: IPokemon, generation?: 'xy' | 'bw', direction?: 'front' | 'back', shiny?: boolean): string {
 		if (!generation) generation = 'xy';
 		const bw = generation === 'bw';
-		if (bw && pokemon.gen > 5) return '';
 
-		let prefix = '//' + Tools.mainServer + '/sprites/' + generation + 'ani';
+		let prefix = '//' + Tools.mainServer + '/sprites/' + (bw ? 'gen5' : '') + 'ani';
 		if (!direction) direction = 'front';
 		if (direction === 'front') {
 			if (shiny) {
@@ -1068,9 +1162,9 @@ export class Dex {
 	getTypeHtml(type: ITypeData, width?: number): string {
 		if (!width) width = 75;
 
-		const colorData = Tools.hexColorCodes[Tools.typeHexColors[type.name]];
-		return '<div style="display:inline-block;background-color:' + colorData['background-color'] + ';background:' +
-			colorData['background'] + ';border: 1px solid #a99890;border-radius:3px;' +
+		const colorData = Tools.getTypeHexCode(type.name);
+		return '<div style="display:inline-block;background-color:' + colorData.color + ';background:' +
+			colorData.gradient + ';border: 1px solid #a99890;border-radius:3px;' +
 			'width:' + width + 'px;padding:1px;color:#fff;text-shadow:1px 1px 1px #333;text-transform: uppercase;' +
 			'font-size:8pt;text-align:center"><b>' + type.name + '</b></div>';
 	}
@@ -1826,21 +1920,22 @@ export class Dex {
 		return teamsAfterEvolutions;
 	}
 
-	includesPokemon(team: IPokemon[] | string[], requiredPokemon: readonly string[]): boolean {
-		const pokemonList: string[] = [];
-		for (const pokemon of team) {
-			pokemonList.push(typeof pokemon === 'string' ? this.getExistingPokemon(pokemon).name : pokemon.name);
-		}
-
-		let includes = true;
+	includesPokemon(team: string[], requiredPokemon: readonly string[]): boolean {
 		for (const pokemon of requiredPokemon) {
-			if (!pokemonList.includes(this.getExistingPokemon(pokemon).name)) {
-				includes = false;
-				break;
+			if (!team.includes(this.getExistingPokemon(pokemon).name)) {
+				return false;
 			}
 		}
 
-		return includes;
+		return true;
+	}
+
+	includesPokemonFormes(team: string[], requiredPokemonFormes: readonly string[][]): boolean {
+		for (const requiredPokemon of requiredPokemonFormes) {
+			if (this.includesPokemon(team, requiredPokemon)) return true;
+		}
+
+		return false;
 	}
 
 	isPossibleTeam(team: IPokemon[] | string[], possibleTeams: DeepImmutable<string[][]>): boolean {
@@ -1904,7 +1999,7 @@ export class Dex {
 		const checkedMoves: string[] = [];
 		for (const i of possibleMoves) {
 			const move = this.getMove(i)!;
-			if (!checkedMoves.includes(move.id) && move.gen <= this.gen && !validator.checkLearnset(move, pokemon)) {
+			if (!checkedMoves.includes(move.id) && move.gen <= this.gen && !validator.checkCanLearn(move, pokemon)) {
 				checkedMoves.push(move.id);
 			}
 		}

@@ -46,8 +46,7 @@ class ZygardesOrders extends QuestionAndAnswer {
 		data["Pokemon Moves"] = Games.getMovesList(x => x.name.length < 18 && x.name.length >= 3).map(x => x.name);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const category = (this.roundCategory || this.sampleOne(categories)) as DataKey;
 		this.currentCategory = category;
 		let answer = this.sampleOne(data[category]);
@@ -82,7 +81,7 @@ class ZygardesOrders extends QuestionAndAnswer {
 			let revealedLetter = false;
 			for (const index of indicies) {
 				this.hints[index] = this.letters[index];
-				if (Client.willBeFiltered(this.hints.join(""), this.isPm(this.room) ? undefined : this.room)) {
+				if (Client.checkFilters(this.hints.join(""), this.isPm(this.room) ? undefined : this.room)) {
 					this.hints[index] = '';
 					continue;
 				}

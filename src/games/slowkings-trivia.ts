@@ -54,8 +54,7 @@ class SlowkingsTrivia extends QuestionAndAnswer {
 		}
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const category = (this.roundCategory || this.sampleOne(categories)) as DataKey;
 		const description = this.sampleOne(categoryKeys[category]);
 		this.answers = data[category][description];
@@ -75,7 +74,12 @@ export const game: IGameFile<SlowkingsTrivia> = Games.copyTemplateProperties(que
 	mascot: "Slowking",
 	minigameCommand: 'trivium',
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess an answer based on the description!",
-	modes: ["survival", "team"],
+	modeProperties: {
+		'timeattack': {
+			roundTime: 10 * 1000,
+		},
+	},
+	modes: ["survival", "team", "timeattack"],
 	variants: [
 		{
 			name: "Slowking's Ability Trivia",

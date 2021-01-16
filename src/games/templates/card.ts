@@ -21,7 +21,6 @@ export interface ICard {
 	id: string;
 	name: string;
 	action?: IActionCardData;
-	displayName?: string;
 	played?: boolean;
 }
 
@@ -62,6 +61,7 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 	drawAmount: number = 1;
 	finitePlayerCards: boolean = false;
 	maxCardRounds: number = 0;
+	maxLateJoinRound: number = 0;
 	maxPlayableGroupSize: number = 0;
 	maxPlayers: number = 20;
 	maximumPlayedCards: number = 1;
@@ -70,7 +70,6 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 	playerList: Player[] = [];
 	playerOrder: Player[] = [];
 	showPlayerCards: boolean = false;
-	timeEnded: boolean = false;
 	usesActionCards: boolean = true;
 	usesHtmlPage = true;
 
@@ -150,15 +149,16 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 		return card;
 	}
 
+	filterPokemonList(pokemon: IPokemon): boolean {
+		if ((pokemon.forme && (!this.filterForme || !this.filterForme(pokemon))) ||
+			(this.usesActionCards && pokemon.id in this.actionCards) || !Dex.hasGifData(pokemon) ||
+			(this.filterPoolItem && !this.filterPoolItem(pokemon))) return false;
+		return true;
+	}
+
 	createDeckPool(): void {
 		this.deckPool = [];
-		const pokemonList = Games.getPokemonList(pokemon => {
-			if ((pokemon.forme && (!this.filterForme || !this.filterForme(pokemon))) ||
-				(this.usesActionCards && pokemon.id in this.actionCards) || !Dex.hasGifData(pokemon) ||
-				(this.filterPoolItem && !this.filterPoolItem(pokemon))) return false;
-			return true;
-		});
-
+		const pokemonList = Games.getPokemonList(pokemon => this.filterPokemonList(pokemon));
 		for (const pokemon of pokemonList) {
 			const color = Tools.toId(pokemon.color);
 			if (!(color in this.colors)) this.colors[color] = pokemon.color;
@@ -204,11 +204,11 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 		return this.getCardIndex(name, cards) !== -1;
 	}
 
-	getCardIndex(name: string, cards: ICard[]): number {
+	getCardIndex(name: string, cards: ICard[], otherPlayedCards?: ICard[]): number {
 		const id = Tools.toId(name);
 		let index = -1;
 		for (let i = 0; i < cards.length; i++) {
-			if (cards[i].id === id) {
+			if (cards[i].id === id && (!otherPlayedCards || !otherPlayedCards.includes(cards[i]))) {
 				index = i;
 				break;
 			}
@@ -218,8 +218,11 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 
 	getCardIndices(names: string[], cards: ICard[]): number[] {
 		const indices: number[] = [];
+		const allCards: ICard[] = [];
 		for (const name of names) {
-			indices.push(this.getCardIndex(name, cards));
+			const index = this.getCardIndex(name, cards, allCards);
+			if (index !== -1) allCards.push(cards[index]);
+			indices.push(index);
 		}
 		return indices;
 	}
@@ -235,9 +238,9 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 	getEggGroupLabel(card: IPokemonCard): string {
 		const eggGroups = [];
 		for (const eggGroup of card.eggGroups) {
-			const colorData = Tools.hexColorCodes[Tools.eggGroupHexColors[eggGroup]];
-			eggGroups.push('<div style="display:inline-block;background-color:' + colorData['background-color'] + ';background:' +
-				colorData['background'] + ';border: 1px solid #a99890;border-radius:3px;width:' + this.detailLabelWidth + 'px;' +
+			const colorData = Tools.getEggGroupHexCode(eggGroup);
+			eggGroups.push('<div style="display:inline-block;background-color:' + colorData.color + ';background:' +
+				colorData.gradient + ';border: 1px solid #a99890;border-radius:3px;width:' + this.detailLabelWidth + 'px;' +
 				'padding:1px;color:#fff;text-shadow:1px 1px 1px #333;text-transform: uppercase;font-size:8pt;text-align:center"><b>' +
 				eggGroup + '</b></div>');
 		}
@@ -245,9 +248,9 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 	}
 
 	getChatColorLabel(card: IPokemonCard): string {
-		const colorData = Tools.hexColorCodes[Tools.pokemonColorHexColors[card.color]];
-		return '<div style="display:inline-block;background-color:' + colorData['background-color'] + ';background:' +
-			colorData['background'] + ';border: 1px solid #a99890;border-radius:3px;width:' + this.detailLabelWidth + 'px;padding:1px;' +
+		const colorData = Tools.getPokemonColorHexCode(card.color);
+		return '<div style="display:inline-block;background-color:' + colorData.color + ';background:' +
+			colorData.gradient + ';border: 1px solid #a99890;border-radius:3px;width:' + this.detailLabelWidth + 'px;padding:1px;' +
 			'color:#fff;text-shadow:1px 1px 1px #333;text-transform: uppercase;font-size:8pt;text-align:center"><b>' + card.color +
 			'</b></div>';
 	}
@@ -263,10 +266,10 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 			let image = '';
 			if (this.isMoveCard(card)) {
 				names.push(card.name);
-				const colorData = Tools.hexColorCodes[Tools.typeHexColors[card.type]];
+				const colorData = Tools.getTypeHexCode(card.type);
 				image = '<div style="display:inline-block;height:51px;width:' + (this.detailLabelWidth + 10) + '"><br /><div ' +
-					'style="display:inline-block;background-color:' + colorData['background-color'] + ';background:' +
-					colorData['background'] + ';border: 1px solid #a99890;border-radius:3px;width:' + this.detailLabelWidth + 'px;' +
+					'style="display:inline-block;background-color:' + colorData.color + ';background:' +
+					colorData.gradient + ';border: 1px solid #a99890;border-radius:3px;width:' + this.detailLabelWidth + 'px;' +
 					'padding:1px;color:#fff;text-shadow:1px 1px 1px #333;text-transform: uppercase;font-size:8pt"><b>' + card.type +
 					'</b></div></div>';
 				width += this.detailLabelWidth;
@@ -345,15 +348,45 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 		player.sendHtmlPage(html);
 	}
 
+	onTimeLimit(): boolean {
+		if (this.finitePlayerCards) {
+			const winners = new Map<Player, number>();
+			let leastCards = Infinity;
+			for (const i in this.players) {
+				if (this.players[i].eliminated) continue;
+				const player = this.players[i];
+				const cards = this.playerCards.get(player);
+				if (!cards) throw new Error(player.name + " has no hand");
+				const len = cards.length;
+				if (len < leastCards) {
+					winners.clear();
+					winners.set(player, 1);
+					leastCards = len;
+				} else if (len === leastCards) {
+					winners.set(player, 1);
+				}
+			}
+
+			winners.forEach((value, player) => {
+				player.metWinCondition = true;
+			});
+		}
+
+		this.end();
+		return true;
+	}
+
 	getNextPlayer(): Player | null {
 		let player = this.playerList.shift();
 		while (!player || player.eliminated) {
 			if (!this.playerList.length) {
 				this.playerList = this.playerOrder.slice();
 				this.cardRound++;
-				if (this.id === 'axewsbattlecards' && this.canLateJoin && this.cardRound > 1) this.canLateJoin = false;
+				if (this.canLateJoin && this.maxLateJoinRound && this.cardRound > this.maxLateJoinRound) this.canLateJoin = false;
 				if (this.parentGame && this.maxCardRounds && this.cardRound > this.maxCardRounds) {
-					this.timeEnd();
+					this.timeEnded = true;
+					this.say("The game has reached the time limit!");
+					this.onTimeLimit();
 					return null;
 				}
 				const html = this.getRoundHtml(players => this.showPlayerCards ? this.getPlayerCards(players) : this.lives &&
@@ -373,33 +406,9 @@ export abstract class Card<ActionCardsType = Dict<IActionCardData>> extends Scri
 		}, players).join(', ');
 	}
 
-	timeEnd(): void {
-		this.timeEnded = true;
-		this.say("Time is up!");
-		const winners = new Map<Player, number>();
-		let leastCards = Infinity;
-		for (const i in this.players) {
-			if (this.players[i].eliminated) continue;
-			const player = this.players[i];
-			const cards = this.playerCards.get(player)!;
-			const len = cards.length;
-			if (len < leastCards) {
-				winners.clear();
-				winners.set(player, 1);
-				leastCards = len;
-			} else if (len === leastCards) {
-				winners.set(player, 1);
-			}
-		}
-		winners.forEach((value, player) => {
-			player.frozen = true;
-		});
-		this.end();
-	}
-
 	onEnd(): void {
 		for (const i in this.players) {
-			if (this.players[i].eliminated || !this.players[i].frozen) continue;
+			if (this.players[i].eliminated || !this.players[i].metWinCondition) continue;
 			const player = this.players[i];
 			this.addBits(player, 500);
 			this.winners.set(player, 1);

@@ -25,7 +25,6 @@ class MagnetonsMashups extends QuestionAndAnswer {
 		return "The" + (finalAnswer ? " final " : "") + " answer was __" + this.answers[0] + "__.";
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
 	checkAnswer(guess: string): string {
 		guess = Tools.toId(guess);
 		for (let i = 1; i < this.answers.length; i++) {
@@ -34,7 +33,7 @@ class MagnetonsMashups extends QuestionAndAnswer {
 		return "";
 	}
 
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		let numberOfElements: number;
 		if (this.format.inputOptions.names) {
 			numberOfElements = this.format.options.names;
@@ -97,13 +96,13 @@ class MagnetonsMashups extends QuestionAndAnswer {
 			lastIndex = index;
 		}
 
-		if (Client.willBeFiltered(mashup, !this.isPm(this.room) ? this.room : undefined)) {
-			await this.setAnswers();
+		if (Client.checkFilters(mashup, !this.isPm(this.room) ? this.room : undefined)) {
+			this.generateAnswer();
 			return;
 		}
 
-		this.answers = Tools.getPermutations(elements).map(x => x.join(""));
-		this.answers.unshift(Tools.joinList(useOrder.map(x => elements[x]), undefined, undefined, "&"));
+		this.answers = [Tools.joinList(useOrder.map(x => elements[x]), undefined, undefined, "&")].concat(
+			Tools.getPermutations(elements).map(x => x.join("")));
 		this.hint = "<b>" + category + "</b>: <i>" + mashup + "</i>";
 		this.additionalHintHeader = "- " + numberOfElements + " names";
 	}

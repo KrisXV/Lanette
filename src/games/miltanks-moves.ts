@@ -54,8 +54,7 @@ class MiltanksMoves extends QuestionAndAnswer {
 		}
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const species = this.sampleOne(data.pokemon);
 		const type = this.sampleOne(Object.keys(data.moves[species]));
 		this.answers = data.moves[species][type];
@@ -72,6 +71,6 @@ export const game: IGameFile<MiltanksMoves> = Games.copyTemplateProperties(quest
 	freejoin: true,
 	name: "Miltank's Moves",
 	mascot: "Miltank",
-	modes: ['survival', 'team'],
+	modes: ['multianswer', 'survival', 'team', 'timeattack'],
 	nonTrivialLoadData: true,
 });

@@ -13,12 +13,14 @@ export class UserHostedGame extends Game {
 	hostId: string = '';
 	hostName: string = '';
 	hostTimeout: NodeJS.Timer | null = null;
+	mascots: string[] = [];
 	notifyRankSignups: boolean = true;
 	readonly points = new Map<Player, number>();
 	savedWinners: Player[] = [];
 	scoreCap: number = 0;
+	shinyMascot: boolean = false;
 	showSignupsHtml = true;
-	storedMessage: string | null = null;
+	storedMessages: Dict<string> | null = null;
 	subHostId: string | null = null;
 	subHostName: string | null = null;
 	twist: string | null = null;
@@ -30,8 +32,12 @@ export class UserHostedGame extends Game {
 
 	// Display
 	getMascotAndNameHtml(additionalText?: string): string {
-		const mascot = this.mascot ? Dex.getPokemonIcon(this.mascot) : '';
-		return mascot + "<b>" + this.name + (additionalText || "") + "</b>";
+		const icons: string[] = [];
+		for (const mascot of this.mascots) {
+			const icon = Dex.getPokemonIcon(Dex.getExistingPokemon(mascot));
+			if (icon) icons.push(icon);
+		}
+		return icons.join("") + "<b>" + this.name + (additionalText || "") + "</b>";
 	}
 
 	// Host
@@ -44,7 +50,36 @@ export class UserHostedGame extends Game {
 			this.hostName = host.name;
 		}
 
-		this.name = this.hostName + "'s " + this.format.name;
+		this.mascots = [];
+		const database = Storage.getDatabase(this.room);
+		if (database.gameHostBoxes && this.hostId in database.gameHostBoxes && Config.showGameHostBoxes &&
+			Config.showGameHostBoxes.includes(this.room.id)) {
+			for (const species of database.gameHostBoxes[this.hostId].pokemon) {
+				const pokemon = Dex.getPokemon(species);
+				if (pokemon) {
+					this.mascots.push(pokemon.name);
+				}
+			}
+		}
+
+		if (this.mascots.length) {
+			const mascotPrefix = Games.getFormatMascotPrefix(this.format);
+			let formatName = this.format.name;
+			if (mascotPrefix) {
+				let team = false;
+				if (formatName.startsWith("Team ")) {
+					team = true;
+					formatName = formatName.substr(5);
+				}
+
+				formatName = formatName.substr(mascotPrefix.length);
+				if (team) formatName = "Team " + formatName;
+			}
+
+			this.name = this.hostName + "'s " + formatName;
+		} else {
+			this.name = this.hostName + "'s " + this.format.name;
+		}
 	}
 
 	setSubHost(user: User): void {
@@ -58,10 +93,7 @@ export class UserHostedGame extends Game {
 	}
 
 	useHostCommand(command: string, target?: string): void {
-		const user = Users.get(this.subHostName || this.hostName);
-		if (user) {
-			CommandParser.parse(this.room, user, Config.commandCharacter + command + (target ? " " + target : ""));
-		}
+		this.parseCommand(this.subHostName || this.hostName, command, target);
 	}
 
 	setStartTimer(minutes: number): void {
@@ -137,10 +169,21 @@ export class UserHostedGame extends Game {
 		this.teams = null;
 	}
 
+	setUhtmlBaseName(): void {
+		const database = Storage.getDatabase(this.room);
+		if (!database.userHostedGameCounts) database.userHostedGameCounts = {};
+		if (!(this.format.id in database.userHostedGameCounts)) database.userHostedGameCounts[this.format.id] = 0;
+		database.userHostedGameCounts[this.format.id]++;
+
+		this.uhtmlBaseName = "userhosted-" + this.format.id + "-" + database.userHostedGameCounts[this.format.id];
+		this.signupsUhtmlName = this.uhtmlBaseName + "-signups";
+		this.joinLeaveButtonUhtmlName = this.uhtmlBaseName + "-join-leave";
+	}
+
 	// Game lifecycle
 	onInitialize(format: IUserHostedFormat): void {
 		this.format = format;
-		this.setUhtmlBaseName('userhosted');
+		this.setUhtmlBaseName();
 
 		this.endTime = Date.now() + HOST_TIME_LIMIT;
 		if (this.format.link) this.description += "<br /><br /><b><a href='" + this.format.link + "'>More info</a></b>";
@@ -150,15 +193,12 @@ export class UserHostedGame extends Game {
 		}
 	}
 
+	getHighlightPhrase(): string {
+		return Games.userHostedGameHighlight + " " + this.id;
+	}
+
 	getSignupsHtml(): string {
-		let html = "<center>";
-		if (this.mascot) {
-			const gif = Dex.getPokemonGif(this.mascot, "xy", 'back');
-			if (gif) html += gif;
-		}
-		html += "<h3>" + this.name + "</h3>" + this.getDescription();
-		html += "</center>";
-		return html;
+		return Games.getHostBoxHtml(this.room, this.hostName, this.name, this.format, this.getHighlightPhrase());
 	}
 
 	signups(): void {
@@ -178,8 +218,8 @@ export class UserHostedGame extends Game {
 		joinLeaveHtml += "</center>";
 		this.sayUhtml(this.joinLeaveButtonUhtmlName, joinLeaveHtml);
 
-		this.sayCommand("/notifyrank all, " + this.room.title + " user-hosted game," + this.name + "," + this.hostName + " " +
-			Games.userHostedGameHighlight + " " + this.name, true);
+		this.sayCommand("/notifyrank all, " + this.room.title + " user-hosted game," + this.name + "," + this.hostId + " " +
+			this.getHighlightPhrase(), true);
 		const firstWarning = 5 * 60 * 1000;
 		const secondWarning = 30 * 1000;
 		this.hostTimeout = setTimeout(() => {
@@ -201,7 +241,7 @@ export class UserHostedGame extends Game {
 	}
 
 	start(isAuth?: boolean): boolean {
-		if (this.minPlayers && !isAuth && this.playerCount < this.minPlayers) return false;
+		if (this.started || (this.minPlayers && !isAuth && this.playerCount < this.minPlayers)) return false;
 
 		if (this.startTimer) clearTimeout(this.startTimer);
 		if (this.signupsHtmlTimeout) clearTimeout(this.signupsHtmlTimeout);
@@ -216,25 +256,8 @@ export class UserHostedGame extends Game {
 	}
 
 	end(): void {
-		let hostDifficulty: GameDifficulty;
-		if (Config.userHostedGameHostDifficulties && this.format.id in Config.userHostedGameHostDifficulties) {
-			hostDifficulty = Config.userHostedGameHostDifficulties[this.format.id];
-		} else {
-			hostDifficulty = 'medium';
-		}
-
-		let hostBits = 300;
-		if (hostDifficulty === 'medium') {
-			hostBits = 400;
-		} else if (hostDifficulty === 'hard') {
-			hostBits = 500;
-		}
-
-		let hostName = this.hostName;
-		if (this.subHostName) {
-			hostName = this.subHostName;
-			hostBits /= 2;
-		}
+		if (this.ended) throw new Error("Game already ended");
+		this.ended = true;
 
 		const now = Date.now();
 		if (!(this.room.id in Games.lastUserHostTimes)) Games.lastUserHostTimes[this.room.id] = {};
@@ -270,11 +293,35 @@ export class UserHostedGame extends Game {
 			database.pastUserHostedGames.pop();
 		}
 
-		Storage.addPoints(this.room, Storage.gameLeaderboard, hostName, hostBits, 'userhosted');
-		const user = Users.get(hostName);
-		if (user) {
-			user.say("You were awarded " + hostBits + " bits! To see your total amount, use this command: ``" + Config.commandCharacter +
-				"bits " + this.room.title + "``. Thanks for your efforts, we hope you host again soon!");
+		Storage.addPoints(this.room, Storage.gameHostingLeaderboard, this.subHostName || this.hostName, 1, this.format.id);
+
+		if (Config.rankedGames && Config.rankedGames.includes(this.room.id)) {
+			let hostDifficulty: GameDifficulty;
+			if (Config.userHostedGameHostDifficulties && this.format.id in Config.userHostedGameHostDifficulties) {
+				hostDifficulty = Config.userHostedGameHostDifficulties[this.format.id];
+			} else {
+				hostDifficulty = 'medium';
+			}
+
+			let hostBits = 300;
+			if (hostDifficulty === 'medium') {
+				hostBits = 400;
+			} else if (hostDifficulty === 'hard') {
+				hostBits = 500;
+			}
+
+			let hostName = this.hostName;
+			if (this.subHostName) {
+				hostName = this.subHostName;
+				hostBits /= 2;
+			}
+
+			Storage.addPoints(this.room, Storage.gameLeaderboard, hostName, hostBits, 'userhosted');
+			const user = Users.get(hostName);
+			if (user) {
+				user.say("You were awarded " + hostBits + " bits! To see your total amount, use this command: ``" +
+					Config.commandCharacter + "bits " + this.room.title + "``. Thanks for your efforts, we hope you host again soon!");
+			}
 		}
 
 		this.setCooldownAndAutoCreate('scripted');
@@ -510,11 +557,10 @@ export const game: IUserHostedFile = {
 				"https://docs.google.com/document/d/1H6bRZlxJSfNZvqzxnbTyV2RiXABtuVgZdprTNEfn6bk",
 		},
 		{
-			name: "Rotom-Dex's Trivia",
+			name: "Rotom's Dex Trivia",
 			mascot: "Rotom",
-			mascotPrefix: "Rotom-Dex's",
 			description: "A dex entry of a Pokemon will be posted and players have to be first to guess the Pokemon correctly!",
-			aliases: ['RDT', 'rotomdexs'],
+			aliases: ['RDT', 'rotomdexstrivia', 'dextrivia'],
 			freejoin: true,
 		},
 		{

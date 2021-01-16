@@ -34,8 +34,7 @@ class KirliasTracingShow extends QuestionAndAnswer {
 		if (this.format.options.freejoin) this.timeout = setTimeout(() => this.nextRound(), 5 * 1000);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		let pokemon = this.sampleOne(data.pokedex);
 		let abilities = data.abilities[pokemon];
 		while (pokemon === this.lastPokemon || abilities === this.lastAbilities) {
@@ -67,5 +66,5 @@ export const game: IGameFile<KirliasTracingShow> = Games.copyTemplateProperties(
 	minigameCommand: 'kirliatrace',
 	minigameCommandAliases: ['ktrace'],
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess an ability that the given Pokemon has!",
-	modes: ['survival', 'team'],
+	modes: ['survival', 'team', 'timeattack'],
 });

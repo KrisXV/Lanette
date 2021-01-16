@@ -7,7 +7,6 @@ import type { User } from "../users";
 import type { ParametersWorker } from '../workers/parameters';
 import type { PortmanteausWorker } from '../workers/portmanteaus';
 import type { CommandDefinitions, LoadedCommands } from "./command-parser";
-import type { IBattleData } from "./tournaments";
 
 export interface IGamesWorkers {
 	parameters: ParametersWorker;
@@ -22,7 +21,9 @@ export type GameDifficulty = 'easy' | 'medium' | 'hard';
 export type AutoCreateTimerType = 'scripted' | 'tournament' | 'userhosted';
 
 export type GameCategory = 'board' | 'board-property' | 'card' | 'card-high-low' | 'card-matching' | 'chain' | 'elimination-tournament' |
-	'identification' | 'knowledge' | 'luck' | 'map' | 'puzzle' | 'reaction' | 'speed' | 'strategy';
+	'identification' | 'knowledge' | 'luck' | 'map' | 'puzzle' | 'reaction' | 'speed' | 'strategy' | 'visual';
+
+export type GameMode = 'group' | 'multianswer' | 'survival' | 'team' | 'timeattack';
 
 export type GameChallenge = 'onevsone';
 
@@ -46,7 +47,7 @@ export interface IGameAchievement {
 
 	repeatBits?: number;
 	minigame?: boolean;
-	mode?: string;
+	mode?: GameMode;
 }
 
 export interface IInternalGames {
@@ -84,7 +85,7 @@ type GameFileTests<T extends ScriptedGame = ScriptedGame> = Dict<{config?: IGame
 	format: IGameFormat<T>, attributes: IGameTestAttributes) => void);}>;
 
 export interface IRandomGameAnswer {
-	answers: string[];
+	answers: readonly string[];
 	hint: string;
 }
 
@@ -130,8 +131,8 @@ interface IGameFileProperties<T extends ScriptedGame = ScriptedGame> {
 	minigameCommand?: string;
 	minigameCommandAliases?: string[];
 	minigameDescription?: string;
-	modeProperties?: Dict<Partial<T>>;
-	modes?: string[];
+	modeProperties?: PartialKeyedDict<GameMode, Partial<T>>;
+	modes?: GameMode[];
 	noOneVsOne?: boolean;
 	nonTrivialLoadData?: boolean;
 	scriptedOnly?: boolean;
@@ -176,19 +177,22 @@ export interface IGameFormat<T extends ScriptedGame = ScriptedGame> extends IGam
 	defaultOptions: DefaultGameOption[];
 	description: string;
 	options: Dict<number>;
+	voter?: string;
 }
 
 export interface IGameVariantProperties<T extends ScriptedGame = ScriptedGame> {
 	name: string;
 	variantAliases: string[];
 
+	aliases?: string[];
 	commandDescriptions?: string[];
 	customizableOptions?: Dict<IGameOptionValues>;
 	defaultOptions?: DefaultGameOption[];
 	description?: string;
 	freejoin?: boolean;
-	modeProperties?: Dict<Partial<T>>;
-	modes?: string[];
+	noOneVsOne?: boolean;
+	modeProperties?: PartialKeyedDict<GameMode, Partial<T>>;
+	modes?: GameMode[];
 }
 
 interface IUserHostedGameClass<T extends UserHostedGame = UserHostedGame> {
@@ -246,11 +250,11 @@ export interface IGameModeFile<T = ScriptedGame, U extends ScriptedGame = Script
 }
 
 export interface IGameMode<T = ScriptedGame, U extends ScriptedGame = ScriptedGame> extends IGameModeFile<T, U> {
-	id: string;
+	id: GameMode;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type PlayerList = Dict<Player> | Player[] | Map<Player, any>;
+export type PlayerList = Dict<Player> | readonly Player[] | Map<Player, any>;
 
 export type LoadedGameFile = DeepImmutable<IGameFormatData>;
 
@@ -267,11 +271,13 @@ export interface ITrainerUhtml {
 	user: string;
 }
 
-export interface IBattleGameData extends IBattleData {
+export interface IBattleGameData {
+	faintedCloakedPokemon: Dict<number>;
+	nicknames: Dict<Dict<string>>;
 	pokemonCounts: Dict<number>;
 	pokemon: Dict<string[]>;
 	pokemonLeft: Dict<number>;
-	nicknames: Dict<Dict<string>>;
+	remainingPokemon: Dict<number>;
+	slots: Map<Player, string>;
 	wrongTeam: Map<Player, boolean>;
-	faintedCloakedPokemon: Dict<number>;
 }

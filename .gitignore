@@ -74,7 +74,8 @@ data/pokedex-mini-bw.js
 databases/*
 !databases/README.md
 design.txt
-errors/
+errors/*
+!errors/README.md
 *.heapsnapshot
 local-utils/
 Pokemon-Showdown/
@@ -82,5 +83,9 @@ pokemon-showdown/
 pokemon-showdown-lkg.txt
 private-data/
 roomlogs/
+src/commands/private/*
+!src/commands/private/README.md
 src/config.ts
+src/message-parsers/private/*
+!src/message-parsers/private/README.md
 src/plugins/private.ts

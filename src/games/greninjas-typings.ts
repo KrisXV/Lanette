@@ -33,8 +33,7 @@ class GreninjasTypings extends QuestionAndAnswer {
 		}
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		let pokemon = this.sampleOne(data.pokedex);
 		let typing = data.types[pokemon];
 		let reverseTyping = data.reverseTypes[pokemon];
@@ -68,7 +67,7 @@ export const game: IGameFile<GreninjasTypings> = Games.copyTemplateProperties(qu
 	mascot: "Greninja",
 	minigameCommand: 'typing',
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess a Pokemon that match the given typing!",
-	modes: ["survival", "team"],
+	modes: ["multianswer", "survival", "team", "timeattack"],
 	variants: [
 		{
 			name: "Greninja's No Order Typings",

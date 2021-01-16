@@ -1,6 +1,6 @@
 import type { ScriptedGame } from "./room-game-scripted";
 import type { Room } from "./rooms";
-import type { GroupName, IChatLogEntry } from "./types/client";
+import type { GroupName, IChatLogEntry, MessageListener } from "./types/client";
 import type { IUserMessageOptions, IUserRoomData } from "./types/users";
 
 const chatFormatting: string[] = ["*", "_", "`", "~", "^", "\\"];
@@ -16,9 +16,9 @@ export class User {
 	id: string;
 	name!: string;
 
-	htmlMessageListeners?: Dict<() => void>;
-	messageListeners?: Dict<() => void>;
-	uhtmlMessageListeners?: Dict<Dict<() => void>>;
+	htmlMessageListeners?: Dict<MessageListener>;
+	messageListeners?: Dict<MessageListener>;
+	uhtmlMessageListeners?: Dict<Dict<MessageListener>>;
 
 	constructor(name: string, id: string) {
 		this.id = id;
@@ -96,28 +96,53 @@ export class User {
 		return storage.emojiWhitelist.includes(this.id);
 	}
 
-	say(message: string, options?: IUserMessageOptions): void {
-		if (!(options && options.dontPrepare)) message = Tools.prepareMessage(message);
-		if (!(options && options.dontCheckFilter) && Client.willBeFiltered(message)) return;
+	updateStatus(status: string, away: boolean): void {
+		this.status = status;
+		this.away = away;
 
-		Client.send({message: "|/pm " + this.name + ", " + message, type: 'pm', user: this.id, measure: !(options && options.dontMeasure)});
+		this.rooms.forEach((value, room) => {
+			if (room.game && room.game.onUserUpdateStatus) room.game.onUserUpdateStatus(this, status, away);
+			if (room.tournament && room.tournament.onUserUpdateStatus) room.tournament.onUserUpdateStatus(this, status, away);
+			if (room.userHostedGame && room.userHostedGame.onUserUpdateStatus) room.userHostedGame.onUserUpdateStatus(this, status, away);
+		});
+	}
+
+	say(message: string, options?: IUserMessageOptions): void {
+		if (!global.Users.get(this.name)) return;
+
+		if (!(options && options.dontPrepare)) message = Tools.prepareMessage(message);
+		if (!(options && options.dontCheckFilter)) {
+			const filter = Client.checkFilters(message);
+			if (filter) {
+				Tools.logMessage("Message not sent to " + this.name + " due to " + filter + ": " + message);
+				return;
+			}
+		}
+
+		Client.send({
+			message: "|/pm " + this.name + ", " + message,
+			text: message,
+			type: 'pm',
+			user: this.id,
+			measure: !(options && options.dontMeasure),
+		});
 	}
 
 	sayCommand(command: string, dontCheckFilter?: boolean): void {
 		this.say(command, {dontCheckFilter, dontPrepare: true, dontMeasure: true});
 	}
 
-	on(message: string, listener: () => void): void {
+	on(message: string, listener: MessageListener): void {
 		if (!this.messageListeners) this.messageListeners = {};
 		this.messageListeners[Tools.toId(Tools.prepareMessage(message))] = listener;
 	}
 
-	onHtml(html: string, listener: () => void): void {
+	onHtml(html: string, listener: MessageListener): void {
 		if (!this.htmlMessageListeners) this.htmlMessageListeners = {};
 		this.htmlMessageListeners[Tools.toId(Client.getListenerHtml(html, true))] = listener;
 	}
 
-	onUhtml(name: string, html: string, listener: () => void): void {
+	onUhtml(name: string, html: string, listener: MessageListener): void {
 		const id = Tools.toId(name);
 		if (!this.uhtmlMessageListeners) this.uhtmlMessageListeners = {};
 		if (!(id in this.uhtmlMessageListeners)) this.uhtmlMessageListeners[id] = {};

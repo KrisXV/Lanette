@@ -1,40 +1,33 @@
 import type { Player } from "../room-activity";
 import { ScriptedGame } from "../room-game-scripted";
-import type { LocationTypes } from "../types/dex";
+import type { LocationType, RegionName } from "../types/dex";
 import type { GameCommandDefinitions, IGameFile } from "../types/games";
 
 const BASE_TRAVELERS_PER_ROUND: number = 3;
 
-const locationTypeNames: KeyedDict<LocationTypes, string> = {
-	city: "City",
-	town: "Town",
-	cave: "Cave",
-	forest: "Forest",
-	mountain: "Mountain",
-	other: "Misc. location",
-};
-
-const data: {regions: Dict<PartialKeyedDict<LocationTypes, readonly string[]>>} = {
+const data: {regions: Dict<PartialKeyedDict<LocationType, readonly string[]>>} = {
 	regions: {},
 };
-const regionKeys: string[] = [];
-const regionTypeKeys: Dict<LocationTypes[]> = {};
+const regionKeys: RegionName[] = [];
+const regionTypeKeys: Dict<LocationType[]> = {};
 
 class PoipolesRegionalPortals extends ScriptedGame {
+	baseTravelersPerRound: number = BASE_TRAVELERS_PER_ROUND;
 	canTravel: boolean = false;
+	inactiveRoundLimit: number = 5;
 	lastRegion: string = '';
 	lastType: string = '';
 	loserPointsToBits: number = 5;
-	maxTravelersPerRound: number = BASE_TRAVELERS_PER_ROUND;
+	maxTravelersPerRound: number = 0;
 	points = new Map<Player, number>();
 	roundLocations: string[] = [];
 	roundTravels = new Set<Player>();
 	winnerPointsToBits: number = 25;
 
 	static loadData(): void {
-		for (const region in Dex.data.locations) {
-			const types = Object.keys(Dex.data.locations[region]) as LocationTypes[];
-			const locations: PartialKeyedDict<LocationTypes, string[]> = {};
+		for (const region of Dex.regions) {
+			const types = Object.keys(Dex.data.locations[region]) as LocationType[];
+			const locations: PartialKeyedDict<LocationType, string[]> = {};
 			for (const type of types) {
 				for (const location of Dex.data.locations[region][type]) {
 					if (!(type in locations)) locations[type] = [];
@@ -42,7 +35,7 @@ class PoipolesRegionalPortals extends ScriptedGame {
 				}
 			}
 
-			const typesWithLocations = Object.keys(locations) as LocationTypes[];
+			const typesWithLocations = Object.keys(locations) as LocationType[];
 			if (typesWithLocations.length) {
 				data.regions[region] = locations;
 				regionKeys.push(region);
@@ -56,11 +49,26 @@ class PoipolesRegionalPortals extends ScriptedGame {
 	}
 
 	onStart(): void {
+		if (this.parentGame && this.parentGame.playerCount < this.baseTravelersPerRound) {
+			this.baseTravelersPerRound = this.parentGame.playerCount;
+		}
+
 		this.nextRound();
 	}
 
 	onNextRound(): void {
 		this.canTravel = false;
+
+		if (this.roundLocations.length) {
+			this.inactiveRounds++;
+			if (this.inactiveRounds === this.inactiveRoundLimit) {
+				this.inactivityEnd();
+				return;
+			}
+		} else {
+			if (this.inactiveRounds) this.inactiveRounds = 0;
+		}
+
 		let reachedCap = false;
 		this.points.forEach((points, player) => {
 			if (points >= this.format.options.points) {
@@ -70,8 +78,6 @@ class PoipolesRegionalPortals extends ScriptedGame {
 		});
 		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 		if (reachedCap) {
-			this.announceWinners();
-			this.convertPointsToBits();
 			this.end();
 			return;
 		}
@@ -89,10 +95,10 @@ class PoipolesRegionalPortals extends ScriptedGame {
 		this.lastType = type;
 
 		this.roundLocations = data.regions[region][type]!.slice();
-		if (this.roundLocations.length < BASE_TRAVELERS_PER_ROUND) {
+		if (this.roundLocations.length < this.baseTravelersPerRound) {
 			this.maxTravelersPerRound = this.roundLocations.length;
 		} else {
-			this.maxTravelersPerRound = BASE_TRAVELERS_PER_ROUND;
+			this.maxTravelersPerRound = this.baseTravelersPerRound;
 		}
 		this.roundTravels.clear();
 
@@ -100,16 +106,21 @@ class PoipolesRegionalPortals extends ScriptedGame {
 		const uhtmlName = this.uhtmlBaseName + '-round-html';
 		this.onUhtml(uhtmlName, html, () => {
 			this.timeout = setTimeout(() => {
-				const text = "Poipole opened a portal to a **" + locationTypeNames[type] + "** in " +
-					"**" + region.charAt(0).toUpperCase() + region.substr(1) + "**!";
+				const text = "Poipole opened a portal to a **" + Dex.locationTypeNames[type] + " location** in " +
+					"**" + Dex.regionNames[region] + "**!";
 				this.on(text, () => {
 					this.canTravel = true;
 					this.timeout = setTimeout(() => this.nextRound(), 20 * 1000);
 				});
 				this.say(text);
-			}, this.sampleOne([4000, 5000, 6000]));
+			}, 5000);
 		});
 		this.sayUhtml(uhtmlName, html);
+	}
+
+	onEnd(): void {
+		this.convertPointsToBits();
+		this.announceWinners();
 	}
 }
 
@@ -135,7 +146,10 @@ const commands: GameCommandDefinitions<PoipolesRegionalPortals> = {
 			this.roundTravels.add(player);
 			this.say(player.name + " is the **" + Tools.toNumberOrderString(this.roundTravels.size) + "** traveler!");
 
-			if (this.roundTravels.size === this.maxTravelersPerRound) this.nextRound();
+			if (this.roundTravels.size === this.maxTravelersPerRound) {
+				this.roundLocations = [];
+				this.nextRound();
+			}
 			return true;
 		},
 	},

@@ -35,8 +35,7 @@ class MetangsAnagrams extends QuestionAndAnswer {
 		data["Pokemon Moves"] = Games.getMovesList(x => x.name.length >= 3).map(x => x.name);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const category = (this.roundCategory || this.sampleOne(categories)) as DataKey;
 		let answer = this.sampleOne(data[category]);
 		while (answer === this.lastAnswer) {
@@ -66,7 +65,7 @@ export const game: IGameFile<MetangsAnagrams> = Games.copyTemplateProperties(que
 	mascot: "Metang",
 	minigameCommand: 'anagram',
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess the answer after unscrambling the letters!",
-	modes: ["survival", "team"],
+	modes: ["survival", "team", "timeattack"],
 	variants: [
 		{
 			name: "Metangs's Ability Anagrams",

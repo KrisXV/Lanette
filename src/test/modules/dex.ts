@@ -66,6 +66,9 @@ describe("Dex", () => {
 			assert(allPossibleMovesRaticateAlola.includes(move));
 		}
 
+		assertStrictEqual(Dex.getExistingPokemon("Furfrou").spriteid, "furfrou");
+		assertStrictEqual(Dex.getExistingPokemon("Furfrou-Dandy").spriteid, "furfrou-dandy");
+
 		assertStrictEqual(Dex.getMoveAvailability(Dex.getExistingMove("Tackle")), 394);
 		assertStrictEqual(Dex.getMoveAvailability(Dex.getExistingMove("Aeroblast")), 2);
 
@@ -201,7 +204,7 @@ describe("Dex", () => {
 	});
 	it('should run methods for all data types', function() {
 		// eslint-disable-next-line @typescript-eslint/no-invalid-this
-		this.timeout(10000);
+		this.timeout(15000);
 
 		for (const i of Dex.data.abilityKeys) {
 			const ability = Dex.getExistingAbility(i);
@@ -239,7 +242,10 @@ describe("Dex", () => {
 			Dex.getFormes(pokemon);
 			Dex.getEvolutionLines(pokemon);
 			Dex.isPseudoLCPokemon(pokemon);
+			Dex.getResistances(pokemon);
+			Dex.getInverseResistances(pokemon);
 			Dex.getWeaknesses(pokemon);
+			Dex.getInverseWeaknesses(pokemon);
 			if (Dex.hasGifData(pokemon)) {
 				Dex.getPokemonGif(pokemon);
 			}
@@ -469,7 +475,7 @@ describe("Dex", () => {
 		assertStrictEqual(Dex.isPseudoLCPokemon(Dex.getExistingPokemon('Pichu')), false);
 		assertStrictEqual(Dex.isPseudoLCPokemon(Dex.getExistingPokemon('Pikachu')), false);
 		assertStrictEqual(Dex.isPseudoLCPokemon(Dex.getExistingPokemon('Raichu')), false);
-		assertStrictEqual(Dex.isPseudoLCPokemon(Dex.getExistingPokemon('Ferroseed')), true);
+		// assertStrictEqual(Dex.isPseudoLCPokemon(Dex.getExistingPokemon('Ferroseed')), true);
 	});
 	it('should return proper values from getEvolutionLines()', () => {
 		const pokemonList = ['Charmander', 'Charmeleon', 'Charizard'];
@@ -541,13 +547,13 @@ describe("Dex", () => {
 	it('should return proper values from includesPokemon()', () => {
 		assert(Dex.includesPokemon(['Pikachu'], ['Pikachu']));
 		assert(Dex.includesPokemon(['Pikachu', 'Charmander'], ['Pikachu']));
-		assert(Dex.includesPokemon([Dex.getExistingPokemon('Pikachu')], ['Pikachu']));
-		assert(Dex.includesPokemon([Dex.getExistingPokemon('Pikachu'), Dex.getExistingPokemon('Charmander')], ['Pikachu']));
 
 		assert(!Dex.includesPokemon(['Pikachu'], ['Pikachu', 'Charmander']));
 		assert(!Dex.includesPokemon(['Pikachu'], ['Charmander']));
-		assert(!Dex.includesPokemon([Dex.getExistingPokemon('Pikachu')], ['Pikachu', 'Charmander']));
-		assert(!Dex.includesPokemon([Dex.getExistingPokemon('Pikachu')], ['Charmander']));
+	});
+	it('should return proper values from includesPokemonFormes()', () => {
+		assert(Dex.includesPokemonFormes(['Vulpix'], [['Vulpix'], ['Vulpix-Alola']]));
+		assert(Dex.includesPokemonFormes(['Vulpix-Alola'], [['Vulpix'], ['Vulpix-Alola']]));
 	});
 	it('should return proper values from getUsablePokemon()', () => {
 		let usablePokemon = Dex.getUsablePokemon(Dex.getExistingFormat("ou"));
@@ -1090,18 +1096,18 @@ describe("Dex", () => {
 	it('should have hex colors for all relevant Pokemon and move data', () => {
 		for (const i of Dex.data.pokemonKeys) {
 			const pokemon = Dex.getExistingPokemon(i);
-			assert(pokemon.color in Tools.pokemonColorHexColors, pokemon.name + "'s color " + pokemon.color);
+			assert(pokemon.color in Tools.pokemonColorHexCodes, pokemon.name + "'s color " + pokemon.color);
 			for (const type of pokemon.types) {
-				assert(type in Tools.typeHexColors, pokemon.name + "'s type " + type);
+				assert(type in Tools.typeHexCodes, pokemon.name + "'s type " + type);
 			}
 			for (const eggGroup of pokemon.eggGroups) {
-				assert(eggGroup in Tools.eggGroupHexColors, pokemon.name + "'s egg group " + eggGroup);
+				assert(eggGroup in Tools.eggGroupHexCodes, pokemon.name + "'s egg group " + eggGroup);
 			}
 		}
 
 		for (const i of Dex.data.moveKeys) {
 			const move = Dex.getExistingMove(i);
-			assert(move.type in Tools.typeHexColors, move.name);
+			assert(move.type in Tools.typeHexCodes, move.name);
 		}
 	});
 });

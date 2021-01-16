@@ -19,6 +19,7 @@ class ShedinjasWonderTrials extends ScriptedGame {
 	canUseMove: boolean = false;
 	currentPokemon: IPokemon | null = null;
 	firstMove: Player | false | undefined;
+	inactiveRoundLimit: number = 5;
 	inverseTypes: boolean = false;
 	lastTyping: string = '';
 	maxPoints: number = 1500;
@@ -27,7 +28,7 @@ class ShedinjasWonderTrials extends ScriptedGame {
 	usedMoves: string[] = [];
 
 	static loadData(): void {
-		data.moves = Games.getMovesList(x => x.id !== 'hiddenpower' && x.category !== 'Status' && !x.isMax && !x.isZ).map(x => x.name);
+		data.moves = Games.getMovesList(x => x.id !== 'hiddenpower' && x.category !== 'Status' && !x.isMax).map(x => x.id);
 		data.pokedex = Games.getPokemonList(x => x.baseSpecies === x.name).map(x => x.name);
 	}
 
@@ -64,43 +65,55 @@ class ShedinjasWonderTrials extends ScriptedGame {
 	onNextRound(): void {
 		this.canUseMove = false;
 		if (this.round > 1) {
-			const effectivenessScale: Dict<string> = {'1': '2x', '2': '4x', '-1': '0.5x', '-2': '0.25x', 'immune': '0x', '0': '1x'};
 			let highestPoints = 0;
-			this.roundMoves.forEach((effectiveness, player) => {
-				const wonderGuardWarrior = effectiveness === '1' || effectiveness === '2';
-				if (this.firstMove === undefined) {
-					if (wonderGuardWarrior) {
-						this.firstMove = player;
-					} else {
-						this.firstMove = false;
-					}
-				} else {
-					if (this.firstMove && (this.firstMove !== player || !wonderGuardWarrior)) this.firstMove = false;
-				}
+			if (this.roundMoves.size) {
+				if (this.inactiveRounds) this.inactiveRounds = 0;
 
-				let points = this.points.get(player) || 0;
-				const originalPoints = points;
-				if (effectiveness === '1') {
-					points += 100;
-				} else if (effectiveness === '2') {
-					points += 200;
-				} else if (effectiveness === '-1') {
-					points -= 100;
-				} else if (effectiveness === '-2') {
-					points -= 200;
-				} else if (effectiveness === 'immune') {
-					points = 0;
+				const effectivenessScale: Dict<string> = {'1': '2x', '2': '4x', '-1': '0.5x', '-2': '0.25x', 'immune': '0x', '0': '1x'};
+				this.roundMoves.forEach((effectiveness, player) => {
+					const wonderGuardWarrior = effectiveness === '1' || effectiveness === '2';
+					if (this.firstMove === undefined) {
+						if (wonderGuardWarrior) {
+							this.firstMove = player;
+						} else {
+							this.firstMove = false;
+						}
+					} else {
+						if (this.firstMove && (this.firstMove !== player || !wonderGuardWarrior)) this.firstMove = false;
+					}
+
+					let points = this.points.get(player) || 0;
+					const originalPoints = points;
+					if (effectiveness === '1') {
+						points += 100;
+					} else if (effectiveness === '2') {
+						points += 200;
+					} else if (effectiveness === '-1') {
+						points -= 100;
+					} else if (effectiveness === '-2') {
+						points -= 200;
+					} else if (effectiveness === 'immune') {
+						points = 0;
+					}
+					if (points < 0) points = 0;
+					if (points > highestPoints) highestPoints = points;
+					this.points.set(player, points);
+					player.say("Your move was **" + effectivenessScale[effectiveness] + "** effective!" + (points !== originalPoints ?
+						" Your total score is now " + points + "." : ""));
+				});
+			} else {
+				this.inactiveRounds++;
+				if (this.inactiveRounds === this.inactiveRoundLimit) {
+					this.inactivityEnd();
+					return;
 				}
-				if (points < 0) points = 0;
-				if (points > highestPoints) highestPoints = points;
-				this.points.set(player, points);
-				player.say("Your move was **" + effectivenessScale[effectiveness] + "** effective!" + (points !== originalPoints ?
-					" Your total score is now " + points + "." : ""));
-			});
+			}
+
 			if (highestPoints >= this.maxPoints) {
 				this.timeout = setTimeout(() => this.end(), 3000);
 				return;
 			}
+
 			if (this.round > 20) {
 				this.timeout = setTimeout(() => {
 					this.say("We've reached the end of the game!");
@@ -146,7 +159,11 @@ const commands: GameCommandDefinitions<ShedinjasWonderTrials> = {
 				user.say(CommandParser.getErrorText(['invalidMove', target]));
 				return false;
 			}
-			if (!data.moves.includes(move.name)) {
+			if (move.id !== Tools.toId(target)) {
+				user.say("You must type the full name of the move.");
+				return false;
+			}
+			if (!data.moves.includes(move.id)) {
 				user.say(move.name + " cannot be used in this game.");
 				return false;
 			}

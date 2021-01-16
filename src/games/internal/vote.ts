@@ -9,10 +9,13 @@ export class Vote extends ScriptedGame {
 	bannedFormats: string[] = [];
 	canVote: boolean | undefined;
 	chosenFormat: string = '';
+	chosenVoter: string = '';
 	endedVoting: boolean = false;
 	internalGame: boolean = true;
 	botSuggestions: string[] = [];
 	updateVotesHtmlTimeout: NodeJS.Timeout | null = null;
+	votingName: string = '';
+	votingNumber: number = 1;
 	votesUhtmlName: string = '';
 	readonly votes = new Map<Player, string>();
 
@@ -90,23 +93,43 @@ export class Vote extends ScriptedGame {
 	}
 
 	getPlayerVoteHtml(format: IGameFormat): string {
-		let html = "Your vote for <b>" + format.nameWithOptions + "</b> has been cast in " + this.room.title + "!";
+		let html = "<div class='infobox'><b>" + this.votingName + "</b><hr />Your vote for <b>" + format.nameWithOptions + "</b> has " +
+			"been cast in " + this.room.title + "!";
 
 		const variants: IGameFormat[] = [];
 
+		const hasFreejoinVariant = format.defaultOptions.includes('freejoin');
+		if (hasFreejoinVariant && !format.options.freejoin) {
+			const inputTarget = format.inputTarget + ", freejoin";
+			const variant = Games.getFormat(inputTarget);
+			if (!Array.isArray(variant) && this.isValidFormat(variant)) {
+				variants.push(variant);
+			}
+		}
+
 		if (!format.variant && format.variants) {
 			for (const variantData of format.variants) {
-				const variant = Games.getFormat(format.inputTarget + ", " + variantData.variantAliases[0]);
-				if (!Array.isArray(variant) && this.isValidFormat(variant)) variants.push(variant);
-			}
-
-			if (variants.length) {
-				html += "<br /><br /><details><summary>Votable game variants</summary>";
-				for (const variant of variants) {
-					html += this.getPmVoteButton(variant.inputTarget, variant.nameWithOptions);
+				if (!format.options.freejoin) {
+					const variant = Games.getFormat(format.inputTarget + ", " + variantData.variantAliases[0]);
+					if (!Array.isArray(variant) && this.isValidFormat(variant)) {
+						variants.push(variant);
+					}
 				}
-				html += "</details>";
+				if (hasFreejoinVariant) {
+					const freejoinVariant = Games.getFormat(format.inputTarget + ", " + variantData.variantAliases[0] + ", freejoin");
+					if (!Array.isArray(freejoinVariant) && this.isValidFormat(freejoinVariant)) {
+						variants.push(freejoinVariant);
+					}
+				}
 			}
+		}
+
+		if (variants.length) {
+			html += "<br /><br /><details><summary>Votable game variants</summary>";
+			for (const variant of variants) {
+				html += this.getPmVoteButton(variant.inputTarget, variant.nameWithOptions);
+			}
+			html += "</details>";
 		}
 
 		if (!format.mode && format.modes) {
@@ -126,7 +149,12 @@ export class Vote extends ScriptedGame {
 			}
 		}
 
+		html += "</div>";
 		return html;
+	}
+
+	getHighlightPhrase(): string {
+		return Games.scriptedGameVoteHighlight;
 	}
 
 	onSignups(): void {
@@ -154,7 +182,17 @@ export class Vote extends ScriptedGame {
 			this.botSuggestions.push(possibleBotPicks[i]);
 		}
 
-		let html = "<center><h3>Vote for the next scripted game with <code>" + Config.commandCharacter + "vote [game]</code></h3>";
+		const database = Storage.getDatabase(this.room);
+		let votingNumber = 1;
+		if (database.scriptedGameCounts && this.id in database.scriptedGameCounts) votingNumber = database.scriptedGameCounts[this.id];
+		this.votingName = "Scripted Game Voting #" + votingNumber;
+		this.votingNumber = votingNumber;
+
+		let html = "<center><h3>" + this.votingName + "</h3>Vote for the next scripted game with the command <code>" +
+			Config.commandCharacter + "vote [name]</code>!";
+		html += '<br /><button class="button" name="parseCommand" value="/highlight roomadd ' +
+				this.getHighlightPhrase() + '">Enable voting highlights</button> | <button class="button" name="parseCommand" ' +
+				'value="/highlight roomdelete ' + this.getHighlightPhrase() + '">Disable voting highlights</button><br /><br />';
 
 		if (this.botSuggestions.length) {
 			html += "<b>" + Users.self.name + "'s suggestions:</b><br />";
@@ -181,7 +219,6 @@ export class Vote extends ScriptedGame {
 		}
 		html += "</details></center>";
 
-		const database = Storage.getDatabase(this.room);
 		const pastGames: string[] = [];
 		if (database.pastGames && database.pastGames.length) {
 			for (const pastGame of database.pastGames) {
@@ -212,17 +249,26 @@ export class Vote extends ScriptedGame {
 
 		this.notifyRankSignups = true;
 		this.sayCommand("/notifyrank all, " + this.room.title + " game vote,Help decide the next scripted game!," +
-			Games.scriptedGameVoteHighlight, true);
+			this.getHighlightPhrase(), true);
 	}
 
 	endVoting(): void {
+		if (this.timeout) clearTimeout(this.timeout);
+
 		this.canVote = false;
 		this.updateVotesHtml(() => {
 			this.timeout = setTimeout(() => {
-				const formats = Array.from(this.votes.values());
+				const votes: {format: string, player: Player}[] = [];
+				this.votes.forEach((format, player) => {
+					votes.push({format, player});
+				});
+
+				let voter: string = '';
 				let format: string;
-				if (formats.length) {
-					format = this.sampleOne(formats);
+				if (votes.length) {
+					const chosen = this.sampleOne(votes);
+					format = chosen.format;
+					voter = chosen.player.name;
 				} else {
 					if (!this.botSuggestions.length) {
 						this.say("A random game could not be chosen.");
@@ -233,6 +279,7 @@ export class Vote extends ScriptedGame {
 				}
 
 				this.chosenFormat = format;
+				this.chosenVoter = voter;
 				this.end();
 			}, 3000);
 		});
@@ -245,7 +292,8 @@ export class Vote extends ScriptedGame {
 
 	onAfterDeallocate(forceEnd: boolean): void {
 		if (!forceEnd && this.chosenFormat) {
-			CommandParser.parse(this.room, Users.self, Config.commandCharacter + "creategame " + this.chosenFormat);
+			CommandParser.parse(this.room, Users.self, Config.commandCharacter + "createpickedgame " +
+				(this.chosenVoter ? this.chosenVoter + ", " : "") + this.chosenFormat, Date.now());
 		}
 	}
 }
@@ -306,7 +354,7 @@ const commands: GameCommandDefinitions<Vote> = {
 			}
 
 			this.votes.set(player, format.inputTarget);
-			player.sayHtml(this.getPlayerVoteHtml(format));
+			player.sayUhtml(this.getPlayerVoteHtml(format), this.uhtmlBaseName + "-" + this.votingNumber);
 
 			if (!this.updateVotesHtmlTimeout) {
 				this.updateVotesHtmlTimeout = setTimeout(() => {

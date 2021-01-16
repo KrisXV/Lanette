@@ -132,7 +132,9 @@ class TapusTerrains extends ScriptedGame {
 			this.currentTerrain = this.sampleOne(terrainKeys);
 			newTerrain = true;
 			this.terrainRound++;
-			if (!this.format.options.freejoin) {
+			if (this.format.options.freejoin) {
+				this.roundJumps.clear();
+			} else {
 				if (this.revealTime > 2000) this.revealTime -= 500;
 				if (this.terrainRound === 20) {
 					this.end();
@@ -260,6 +262,7 @@ export const game: IGameFile<TapusTerrains> = {
 			name: "Tapus' Terrains Elimination",
 			isElimination: true,
 			variantAliases: ["elimination"],
+			defaultOptions: [],
 		},
 	],
 };

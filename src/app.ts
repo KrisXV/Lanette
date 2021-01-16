@@ -1,13 +1,11 @@
 import * as client from './client';
 import * as commandParser from './command-parser';
-import * as commands from './commands';
 // eslint-disable-next-line @typescript-eslint/prefer-ts-expect-error
 // @ts-ignore - generated after first run
 import * as config from './config';
 import * as ConfigLoader from './config-loader';
 import * as dex from './dex';
 import * as games from './games';
-import * as PluginsLoader from './plugins-loader';
 import * as rooms from './rooms';
 import * as storage from './storage';
 import * as tools from './tools';
@@ -16,27 +14,16 @@ import type { ReloadableModule } from './types/app';
 import type { IGamesWorkers } from './types/games';
 import * as users from './users';
 
-const moduleOrder: ReloadableModule[] = ['tools', 'config', 'dex', 'client', 'commandparser', 'storage', 'tournaments',
-	'plugins', 'commands', 'games'];
+const moduleOrder: ReloadableModule[] = ['tools', 'config', 'dex', 'client', 'storage', 'tournaments', 'commandparser', 'games'];
 const moduleFilenames: KeyedDict<ReloadableModule, string> = {
 	client: 'client',
 	commandparser: 'command-parser',
-	commands: 'commands',
 	config: 'config',
 	dex: 'dex',
 	games: 'games',
-	plugins: 'plugins-loader',
 	storage: 'storage',
 	tools: 'tools',
 	tournaments: 'tournaments',
-};
-
-const reloadCommands = function(reloadedModules: ReloadableModule[]): void {
-	// eslint-disable-next-line @typescript-eslint/no-var-requires
-	global.Commands = CommandParser.loadBaseCommands(require('./commands'));
-	global.BaseCommands = Tools.deepClone(Commands);
-
-	if (!reloadedModules.includes('games')) Games.loadFormatCommands();
 };
 
 module.exports = (): void => {
@@ -51,13 +38,19 @@ module.exports = (): void => {
 	users.instantiate();
 	games.instantiate();
 
+	CommandParser.loadBaseCommands();
+
+	console.log("Loading databases...");
 	Storage.importDatabases();
+
+	console.log("Loading dex data...");
+	Dex.loadAllData();
+
+	console.log("Loading games...");
+	Games.loadFormats();
+
+	console.log("Loading tournament schedules...");
 	Tournaments.loadSchedules();
-
-	PluginsLoader.load();
-
-	global.Commands = CommandParser.loadBaseCommands(commands);
-	global.BaseCommands = Tools.deepClone(Commands);
 
 	global.__reloadInProgress = false;
 
@@ -125,7 +118,7 @@ module.exports = (): void => {
 		const buildScript = path.join(Tools.rootFolder, 'build.js');
 		Tools.uncacheTree(buildScript);
 
-		// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return
+		// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-call
 		return (require(buildScript)(buildOptions) as Promise<void>).then(() => {
 			for (const moduleId of modules) {
 				if (moduleId === 'client') {
@@ -136,15 +129,17 @@ module.exports = (): void => {
 					// eslint-disable-next-line @typescript-eslint/no-var-requires
 					const newCommandParser = require('./' + moduleFilenames[moduleId]) as typeof import('./command-parser');
 					newCommandParser.instantiate();
-				} else if (moduleId === 'commands') {
-					reloadCommands(modules);
+					CommandParser.loadBaseCommands();
+
+					if (!modules.includes('games')) Games.loadFormatCommands();
 				} else if (moduleId === 'config') {
 					// eslint-disable-next-line @typescript-eslint/no-var-requires
 					const configLoader = require('./config-loader') as typeof import('./config-loader');
 					// eslint-disable-next-line @typescript-eslint/no-var-requires
 					const newConfig = configLoader.load(require('./config') as typeof import('./config-example'));
 					global.Config = newConfig;
-					Rooms.checkLoggingConfigs();
+					Client.updateConfigSettings();
+					Rooms.updateConfigSettings();
 				} else if (moduleId === 'dex') {
 					// eslint-disable-next-line @typescript-eslint/no-var-requires
 					const newDex = require('./' + moduleFilenames[moduleId]) as typeof import('./dex');
@@ -156,11 +151,6 @@ module.exports = (): void => {
 					// eslint-disable-next-line @typescript-eslint/no-var-requires
 					const newGames = require('./' + moduleFilenames[moduleId]) as typeof import('./games');
 					newGames.instantiate();
-				} else if (moduleId === 'plugins') {
-					// eslint-disable-next-line @typescript-eslint/no-var-requires
-					const pluginsLoader = require('./plugins-loader') as typeof import('./plugins-loader');
-					pluginsLoader.load();
-					reloadCommands(modules);
 				} else if (moduleId === 'storage') {
 					// eslint-disable-next-line @typescript-eslint/no-var-requires
 					const newStorage = require('./' + moduleFilenames[moduleId]) as typeof import('./storage');

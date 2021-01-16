@@ -25,8 +25,7 @@ class ChimechosStatSchool extends QuestionAndAnswer {
 		}
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const stats = this.sampleOne(statsKeys);
 		this.answers = data.stats[stats];
 		this.hint = "<b>Randomly generated base stats</b>: <i>" + stats + "</i>";
@@ -42,5 +41,5 @@ export const game: IGameFile<ChimechosStatSchool> = Games.copyTemplateProperties
 	freejoin: true,
 	name: "Chimecho's Stat School",
 	mascot: "Chimecho",
-	modes: ["survival", "team"],
+	modes: ["survival", "team", "timeattack"],
 });

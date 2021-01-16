@@ -7,13 +7,13 @@ import type { UserHostedGame } from './room-game-user-hosted';
 import type { Room } from "./rooms";
 import type { CommandErrorArray } from "./types/command-parser";
 import type {
-	AutoCreateTimerType, DefaultGameOption, GameCategory, GameCommandDefinitions, GameCommandReturnType, IGameAchievement, IGameFile,
-	IGameFormat, IGameFormatComputed, IGameMode, IGameModeFile, IGameOptionValues, IGamesWorkers, IGameTemplateFile, IGameVariant,
-	IInternalGames, InternalGameKey, IUserHostedComputed, IUserHostedFormat, IUserHostedFormatComputed, LoadedGameCommands,
+	AutoCreateTimerType, DefaultGameOption, GameCategory, GameCommandDefinitions, GameCommandReturnType, GameMode, IGameAchievement,
+	IGameFile, IGameFormat, IGameFormatComputed, IGameMode, IGameModeFile, IGameOptionValues, IGamesWorkers, IGameTemplateFile,
+	IGameVariant, IInternalGames, InternalGameKey, IUserHostedComputed, IUserHostedFormat, IUserHostedFormatComputed, LoadedGameCommands,
 	LoadedGameFile, UserHostedCustomizable
 } from './types/games';
 import type { IAbility, IAbilityCopy, IItem, IItemCopy, IMove, IMoveCopy, IPokemon, IPokemonCopy } from './types/pokemon-showdown';
-import type { IPastGame } from './types/storage';
+import type { IGameHostBox, IGameScriptedBox, IPastGame } from './types/storage';
 import type { User } from './users';
 import { ParametersWorker } from './workers/parameters';
 import { PortmanteausWorker } from './workers/portmanteaus';
@@ -45,6 +45,7 @@ const categoryNames: KeyedDict<GameCategory, string> = {
 	'reaction': 'Reaction',
 	'speed': 'Speed',
 	'strategy': 'Strategy',
+	'visual': 'Visual',
 };
 
 const sharedCommandDefinitions: GameCommandDefinitions = {
@@ -130,7 +131,7 @@ export class Games {
 	/* eslint-enable */
 
 	constructor() {
-		const sharedCommands = CommandParser.loadCommands(sharedCommandDefinitions);
+		const sharedCommands = CommandParser.loadCommandDefinitions(sharedCommandDefinitions);
 		this.sharedCommands = sharedCommands;
 		this.commands = Object.assign(Object.create(null), sharedCommands) as GameCommandDefinitions;
 	}
@@ -237,7 +238,7 @@ export class Games {
 
 	loadFormats(): void {
 		// @ts-expect-error
-		this.userHosted = (require(path.join(Tools.rootFolder, "built", "room-game-user-hosted.js")) as // eslint-disable-line @typescript-eslint/no-var-requires
+		this.userHosted = (require(path.join(Tools.builtFolder, "room-game-user-hosted.js")) as // eslint-disable-line @typescript-eslint/no-var-requires
 			typeof import('./room-game-user-hosted')).game;
 
 		const internalGameKeys = Object.keys(internalGamePaths) as (keyof IInternalGames)[];
@@ -248,8 +249,11 @@ export class Games {
 
 			let commands;
 			if (file.commands) {
-				commands = CommandParser.loadCommands<ScriptedGame, GameCommandReturnType>(Tools.deepClone(file.commands));
+				commands = CommandParser.loadCommandDefinitions<ScriptedGame, GameCommandReturnType>(Tools.deepClone(file.commands));
 				for (const i in commands) {
+					if (i in BaseCommands) {
+						throw new Error("Internal game " + file.name + " command '" + i + "' already exists as a regular command.");
+					}
 					if (!(i in this.commands)) this.commands[i] = commands[i];
 				}
 			}
@@ -273,6 +277,9 @@ export class Games {
 
 			if (file.commands) {
 				for (const i in file.commands) {
+					if (i in BaseCommands) {
+						throw new Error("Mode " + file.name + " command '" + i + "' already exists as a regular command.");
+					}
 					if (!(i in this.commands)) this.commands[i] = file.commands[i];
 				}
 			}
@@ -303,7 +310,9 @@ export class Games {
 			if (id in this.formats) throw new Error("The name '" + file.name + "' is already used by another game.");
 
 			let commands;
-			if (file.commands) commands = CommandParser.loadCommands<ScriptedGame, GameCommandReturnType>(Tools.deepClone(file.commands));
+			if (file.commands) {
+				commands = CommandParser.loadCommandDefinitions<ScriptedGame, GameCommandReturnType>(Tools.deepClone(file.commands));
+			}
 
 			let variants;
 			if (file.variants) {
@@ -429,6 +438,17 @@ export class Games {
 							}
 						}
 					}
+
+					if (variant.aliases) {
+						for (const alias of variant.aliases) {
+							const aliasId = Tools.toId(alias);
+							if (aliasId in this.aliases) {
+								throw new Error(format.name + "'s variant alias '" + alias + "' is already an alias for " +
+									this.aliases[aliasId] + ".");
+							}
+							this.aliases[aliasId] = format.id + "," + variant.variantAliases[0];
+						}
+					}
 				}
 			}
 
@@ -477,24 +497,23 @@ export class Games {
 	loadFormatCommands(): void {
 		for (const i in this.commands) {
 			Commands[i] = {
-				command(target, room, user, command) {
+				command(target, room, user, command, timestamp) {
 					let returnedResult: boolean = false;
 					if (this.isPm(room)) {
 						if (user.game) {
-							const result = user.game.tryCommand(target, user, user, command);
+							const result = user.game.tryCommand(target, user, user, command, timestamp);
 							if (result) returnedResult = result;
 						} else {
-							// eslint-disable-next-line @typescript-eslint/no-misused-promises, @typescript-eslint/space-before-function-paren
 							user.rooms.forEach((value, userRoom) => {
 								if (userRoom.game) {
-									const result = userRoom.game.tryCommand(target, user, user, command);
+									const result = userRoom.game.tryCommand(target, user, user, command, timestamp);
 									if (result) returnedResult = result;
 								}
 							});
 						}
 					} else {
 						if (room.game) {
-							const result = room.game.tryCommand(target, room, user, command);
+							const result = room.game.tryCommand(target, room, user, command, timestamp);
 							if (result) returnedResult = result;
 						}
 					}
@@ -582,7 +601,7 @@ export class Games {
 			const targetId = Tools.toId(target);
 			if (!targetId) continue;
 			if (formatData.modes) {
-				const modeId = targetId in this.modeAliases ? this.modeAliases[targetId] : targetId;
+				const modeId = (targetId in this.modeAliases ? this.modeAliases[targetId] : targetId) as GameMode;
 				if (formatData.modes.includes(modeId)) {
 					if (mode) return ['tooManyGameModes'];
 					mode = this.modes[modeId];
@@ -654,21 +673,17 @@ export class Games {
 			variant,
 		};
 
-		let customizableOptions: Dict<IGameOptionValues>;
-		if (variant && variant.customizableOptions) {
-			customizableOptions = variant.customizableOptions;
-		} else {
-			customizableOptions = formatData.customizableOptions || {};
+		let customizableOptions: Dict<IGameOptionValues> = formatData.customizableOptions || {};
+		let defaultOptions: DefaultGameOption[] = formatData.defaultOptions || [];
+		let noOneVsOne: boolean = formatData.noOneVsOne || false;
+		if (variant) {
+			if (variant.customizableOptions) customizableOptions = variant.customizableOptions;
+			if (variant.defaultOptions) defaultOptions = variant.defaultOptions;
+			if (noOneVsOne && variant.noOneVsOne === false) noOneVsOne = false;
 		}
 
-		let defaultOptions: DefaultGameOption[];
-		if (variant && variant.defaultOptions) {
-			defaultOptions = variant.defaultOptions;
-		} else {
-			defaultOptions = formatData.defaultOptions || [];
-		}
-
-		const format = Object.assign(formatData, formatComputed, {customizableOptions, defaultOptions, options: {}}) as IGameFormat;
+		const format = Object.assign(formatData, formatComputed,
+			{customizableOptions, defaultOptions, noOneVsOne, options: {}}) as IGameFormat;
 		format.options = ScriptedGame.setOptions(format, mode, variant);
 
 		return format;
@@ -881,6 +896,7 @@ export class Games {
 		const limitCategories = format.category && Config.limitGamesByCategory && Config.limitGamesByCategory.includes(room.id) ? true :
 			false;
 		let pastGameCategory = false;
+		let pastGameMode = '';
 		let categoryGamesBetween = 0;
 
 		for (let i = pastGames.length - 1; i >= 0; i--) {
@@ -891,7 +907,8 @@ export class Games {
 			}
 
 			if (limitModes && format.mode && pastFormat.mode && format.mode.id === pastFormat.mode.id) {
-				return "There is another " + format.mode.name + "-mode game on the past games list.";
+				pastGameMode = format.mode.name;
+				break;
 			}
 
 			if (limitCategories) {
@@ -910,6 +927,10 @@ export class Games {
 			const remainingGames = categoryCooldown - categoryGamesBetween;
 			return remainingGames + " more game" + (remainingGames > 1 ? "s" : "") + " must be played before another " + format.category +
 				" game.";
+		}
+
+		if (pastGameMode) {
+			return "There is another " + pastGameMode + "-mode game on the past games list.";
 		}
 
 		return true;
@@ -946,10 +967,10 @@ export class Games {
 		}
 
 		room.game = new format.class(room, pmRoom, initialSeed);
+		if (isMinigame) room.game.isMiniGame = true;
 		room.game.initialize(format);
 
 		if (isMinigame) {
-			room.game.isMiniGame = true;
 			if (format.options.points) format.options.points = 1;
 			if (!format.freejoin && 'freejoin' in format.customizableOptions) format.options.freejoin = 1;
 		}
@@ -981,6 +1002,13 @@ export class Games {
 		}
 
 		return room.userHostedGame;
+	}
+
+	disableFormat(format: IGameFormat): void {
+		if (format.id in this.formats) {
+			// @ts-expect-error
+			this.formats[format.id].disabled = true;
+		}
 	}
 
 	banFromNextVote(room: Room, format: IGameFormat): void {
@@ -1015,12 +1043,13 @@ export class Games {
 
 			delete this.autoCreateTimerData[room.id];
 			const database = Storage.getDatabase(room);
+			const now = Date.now();
 			if (type === 'tournament') {
-				CommandParser.parse(room, Users.self, Config.commandCharacter + "createrandomtournamentgame");
+				CommandParser.parse(room, Users.self, Config.commandCharacter + "createrandomtournamentgame", now);
 			} else if (type === 'scripted' || !database.userHostedGameQueue || !database.userHostedGameQueue.length) {
-				CommandParser.parse(room, Users.self, Config.commandCharacter + "startvote");
+				CommandParser.parse(room, Users.self, Config.commandCharacter + "startvote", now);
 			} else if (type === 'userhosted') { // eslint-disable-line @typescript-eslint/no-unnecessary-condition
-				CommandParser.parse(room, Users.self, Config.commandCharacter + "nexthost");
+				CommandParser.parse(room, Users.self, Config.commandCharacter + "nexthost", now);
 			}
 		}, timer);
 	}
@@ -1247,6 +1276,209 @@ export class Games {
 		return tier !== 'Illegal' && tier !== 'Unreleased' && !tier.startsWith('(');
 	}
 
+	getTrainerCardHtml(room: Room, name: string, format?: IGameFormat | IUserHostedFormat): string {
+		const id = Tools.toId(name);
+		const database = Storage.getDatabase(room);
+		if (!database.gameTrainerCards || !(id in database.gameTrainerCards)) return "";
+
+		const trainerCard = database.gameTrainerCards[id];
+		const avatarSpriteId = Dex.getTrainerSpriteId(trainerCard.avatar);
+		if (!avatarSpriteId) return "";
+
+		let html = '<span class="infobox" style="display: inline-block;width:250px"><center><b><username>' + name + '</username></b>';
+		if (format) {
+			const bits = Storage.getPoints(room, Storage.gameLeaderboard, name);
+			if (bits) {
+				html += '&nbsp;&bull;&nbsp;<b>' + bits + ' bits</b>';
+			}
+		}
+		html += "<hr /><span style='display: block;height:115px";
+		if (trainerCard.background) {
+			html += ";background: " + Tools.hexCodes[trainerCard.background].gradient;
+		}
+		html += "'>";
+
+		const emptySpan = '<span style="display: inline-block ; height: 30px ; width: 40px"></span>';
+		const avatarHtml = Dex.getTrainerSprite(avatarSpriteId);
+		if (trainerCard.pokemon.length) {
+			if (trainerCard.pokemonGifs) {
+				html += Dex.getPokemonGif(Dex.getExistingPokemon(trainerCard.pokemon[0]));
+				html += avatarHtml;
+				if (trainerCard.pokemon[1]) html += Dex.getPokemonGif(Dex.getExistingPokemon(trainerCard.pokemon[1]));
+			} else {
+				if (trainerCard.pokemon.length <= 2) {
+					html += Dex.getPokemonIcon(Dex.getExistingPokemon(trainerCard.pokemon[0]));
+					html += avatarHtml;
+					if (trainerCard.pokemon[1]) html += Dex.getPokemonIcon(Dex.getExistingPokemon(trainerCard.pokemon[1]));
+					html += "<br />";
+					html += emptySpan;
+				} else {
+					html += emptySpan;
+					html += avatarHtml;
+					html += emptySpan;
+					html += "<br />";
+					for (const pokemon of trainerCard.pokemon) {
+						html += Dex.getPokemonIcon(Dex.getExistingPokemon(pokemon));
+					}
+				}
+			}
+		} else {
+			html += avatarHtml;
+		}
+
+		html += "</span>";
+
+		if (format) {
+			const currentCache = Storage.getCurrentSourcePointsCache(room, Storage.gameLeaderboard, format.id);
+			if (currentCache) {
+				let index = -1;
+				for (let i = 0; i < currentCache.length; i++) {
+					if (currentCache[i].id === id) {
+						index = i;
+						break;
+					}
+				}
+
+				if (index !== -1) {
+					html += "<hr /><b>" + Tools.toNumberOrderString(index + 1) + "</b> in " + format.name;
+				}
+			}
+		}
+
+		html += "</center></span>";
+		return html;
+	}
+
+	getScriptedBoxHtml(room: Room, gameName: string, voter?: string, description?: string, mascot?: IPokemon, shinyMascot?: boolean,
+		highlightPhrase?: string, modeHighlightPhrase?: string): string {
+		let scriptedBox: IGameScriptedBox | undefined;
+		if (voter) {
+			const user = Users.get(voter);
+			if (user) voter = user.name;
+
+			const id = Tools.toId(voter);
+			const database = Storage.getDatabase(room);
+			if (database.gameScriptedBoxes && id in database.gameScriptedBoxes) scriptedBox = database.gameScriptedBoxes[id];
+		}
+
+		let html = "<center>";
+		html += "<span";
+		if (scriptedBox && scriptedBox.background) {
+			html += " style='display: block;";
+			if (Tools.hexCodes[scriptedBox.background].textColor) {
+				html += 'color: ' + Tools.hexCodes[scriptedBox.background].textColor + ';';
+			} else {
+				html += 'color: #000000;';
+			}
+			html += "background: " + Tools.hexCodes[scriptedBox.background].gradient + "'";
+		}
+		html += ">";
+
+		if (scriptedBox && voter) {
+			const icons: string[] = [];
+			for (const pokemon of scriptedBox.pokemon) {
+				const icon = Dex.getPokemonIcon(Dex.getExistingPokemon(pokemon));
+				if (icon) icons.push(icon);
+			}
+
+			html += (icons.length ? icons.join("&nbsp;") + " " : "") + "<b>" + voter + "</b>'s pick<br /><br />";
+		}
+
+		if (mascot) {
+			const gif = Dex.getPokemonGif(mascot, undefined, undefined, shinyMascot);
+			if (gif) html += gif;
+		}
+		html += "<h3>" + gameName + "</h3>";
+		if (description) html += description;
+
+		let buttonStyle = '';
+		if (scriptedBox && scriptedBox.buttons) {
+			if (Tools.hexCodes[scriptedBox.buttons].textColor) {
+				buttonStyle += 'color: ' + Tools.hexCodes[scriptedBox.buttons].textColor + ';';
+			} else {
+				buttonStyle += 'color: #000000;';
+			}
+			buttonStyle += "background: " + Tools.hexCodes[scriptedBox.buttons].color;
+		}
+
+		html += '<br /><br /><button class="button"' + (buttonStyle ? ' style="' + buttonStyle + '"' : '');
+		if (highlightPhrase) html += ' name="parseCommand" value="/highlight roomadd ' + highlightPhrase + '"';
+		html += '>Enable game highlights</button>';
+		html += '&nbsp;|&nbsp;';
+		html += '<button class="button"' + (buttonStyle ? ' style="' + buttonStyle + '"' : '');
+		if (highlightPhrase) html += ' name="parseCommand" value="/highlight roomdelete ' + highlightPhrase + '"';
+		html += '>Disable game highlights</button>';
+
+		if (modeHighlightPhrase) {
+			html += '<br /><button class="button"' + (buttonStyle ? ' style="' + buttonStyle + '"' : '') +
+				' name="parseCommand" value="/highlight roomadd ' + modeHighlightPhrase + '">Enable mode highlights</button> | ' +
+				'<button class="button"' + (buttonStyle ? ' style="' + buttonStyle + '"' : '') + ' name="parseCommand" ' +
+				'value="/highlight roomdelete ' + modeHighlightPhrase + '">Disable mode highlights</button>';
+		}
+
+		html += "<br />&nbsp;</span></center>";
+
+		return html;
+	}
+
+	getHostBoxHtml(room: Room, host: string, gameName: string, format?: IUserHostedFormat, highlightPhrase?: string): string {
+		const id = Tools.toId(host);
+		const database = Storage.getDatabase(room);
+		let hostBox: IGameHostBox | undefined;
+		if (database.gameHostBoxes && id in database.gameHostBoxes) hostBox = database.gameHostBoxes[id];
+
+		let html = "<center>";
+		html += "<span";
+		if (hostBox && hostBox.background) {
+			html += " style='display: block;";
+			if (Tools.hexCodes[hostBox.background].textColor) {
+				html += 'color: ' + Tools.hexCodes[hostBox.background].textColor + ';';
+			} else {
+				html += 'color: #000000;';
+			}
+			html += "background: " + Tools.hexCodes[hostBox.background].gradient + "'";
+		}
+		html += ">";
+
+		if (hostBox && hostBox.pokemon.length) {
+			const gifs: string[] = [];
+			for (let i = 0; i < hostBox.pokemon.length; i++) {
+				const gif = Dex.getPokemonGif(Dex.getExistingPokemon(hostBox.pokemon[i]), undefined, undefined, hostBox.shinyPokemon[i]);
+				if (gif) gifs.push(gif);
+			}
+
+			html += gifs.join("&nbsp;");
+		}
+
+		html += "<h3>" + gameName + "</h3>";
+		if (format) {
+			html += format.description;
+		} else {
+			html += "The game's description will be displayed here";
+		}
+
+		let buttonStyle = '';
+		if (hostBox && hostBox.buttons) {
+			if (Tools.hexCodes[hostBox.buttons].textColor) {
+				buttonStyle += 'color: ' + Tools.hexCodes[hostBox.buttons].textColor + ';';
+			} else {
+				buttonStyle += 'color: #000000;';
+			}
+			buttonStyle += "background: " + Tools.hexCodes[hostBox.buttons].color;
+		}
+
+		html += '<br /><br /><button class="button"' + (buttonStyle ? ' style="' + buttonStyle + '"' : '');
+		if (highlightPhrase) html += ' name="parseCommand" value="/highlight roomadd ' + highlightPhrase + '"';
+		html += '>Enable game highlights</button>';
+		html += '&nbsp;|&nbsp;';
+		html += '<button class="button"' + (buttonStyle ? ' style="' + buttonStyle + '"' : '');
+		if (highlightPhrase) html += ' name="parseCommand" value="/highlight roomdelete ' + highlightPhrase + '"';
+		html += '>Disable game highlights</button>';
+		html += "<br />&nbsp;</span></center>";
+
+		return html;
+	}
+
 	updateGameCatalog(room: Room): void {
 		if (!Config.githubApiCredentials || !('gist' in Config.githubApiCredentials) || !Config.gameCatalogGists ||
 			!(room.id in Config.gameCatalogGists)) return;
@@ -1303,9 +1535,12 @@ export class Games {
 				"* <code>" + commandCharacter + "randgtimer [seconds], [min], [max]</code> - set random timer between [min] and " +
 					"[max] minutes or seconds if specified",
 				"* <code>" + commandCharacter + "gtimer off</code> - turn off the previously set timer",
-				"* <code>" + commandCharacter + "store [message or command]</code> - store a message or command to be used " +
+				"* <code>" + commandCharacter + "store [message or command]</code> - store a single message or command to be used " +
 					"throughout the game",
-				"* <code>" + commandCharacter + "stored</code> - display a stored message or use a stored command",
+				"* <code>" + commandCharacter + "store [key], [message or command]</code> - store one of many messages or commands " +
+					"to be used throughout the game using the specified key",
+				"* <code>" + commandCharacter + "stored [key]</code> - display a stored message or use a stored command, optionally " +
+					"the message matching the specified key",
 				"* <code>" + commandCharacter + "twist [twist]</code> - set or view the twist for the game",
 				"* <code>" + commandCharacter + "gcap [#]</code> - set or view the player cap for the game",
 				"* <code>" + commandCharacter + "scorecap [#]</code> - set or view the score cap for the game",
@@ -1329,9 +1564,10 @@ export class Games {
 				"\nOther generators:",
 				"* <code>" + commandCharacter + "ranswer [game]</code> - in PMs, generate a hint and answer for the specified game",
 				"* <code>" + commandCharacter + "rbadge [region]</code> - generate a badge, optionally from the specified region",
-				"* <code>" + commandCharacter + "rchar [region]</code> - generate a character, optionally from the specified region",
-				"* <code>" + commandCharacter + "rloc [region], [location type]</code> - generate a location, optionally from the " +
-					"specified region and of the specified type",
+				"* <code>" + commandCharacter + "rchar [region/character type]</code> - generate a character, optionally from the " +
+					"specified region and/or of the specified type",
+				"* <code>" + commandCharacter + "rloc [region/location type]</code> - generate a location, optionally from the " +
+					"specified region and/or of the specified type",
 				"* <code>" + commandCharacter + "rletter</code> - generate a letter",
 				"* <code>" + commandCharacter + "rpick [option 1], [option 2], [...]</code> - generate one of the specified options",
 				"* <code>" + commandCharacter + "rorder [option 1], [option 2], [...]</code> - shuffle the specified options",
@@ -1400,11 +1636,34 @@ export class Games {
 		const defaultCategory = "Uncategorized";
 		if (allowsScriptedGames) {
 			const categories: Dict<string[]> = {};
-			const keys = Object.keys(this.formats);
-			keys.sort();
-			for (const key of keys) {
+			const formatKeys = Object.keys(this.formats);
+			formatKeys.sort();
+
+			const formats: IGameFormat[] = [];
+			for (const key of formatKeys) {
 				const format = this.getExistingFormat(key);
 				if (format.disabled || format.tournamentGame) continue;
+				formats.push(format);
+			}
+
+			const modes: Dict<string[]> = {};
+			const modeKeys = Object.keys(this.modes);
+			modeKeys.sort();
+
+			for (const key of modeKeys) {
+				const mode = this.modes[key];
+				const games: string[] = [];
+				for (const format of formats) {
+					if (format.modes && format.modes.includes(mode.id)) {
+						games.push(Tools.toMarkdownAnchor(format.name, format.mascot ? "-" : ""));
+					}
+				}
+
+				modes[mode.name] = ["### " + mode.name, "**Description**: " + mode.description,
+					"\n**Playable games**: " + games.join(", ")];
+			}
+
+			for (const format of formats) {
 				const info: string[] = [];
 
 				let mascot: IPokemon | undefined;
@@ -1475,6 +1734,11 @@ export class Games {
 				scriptedGames.push("\n");
 			}
 
+			scriptedGames.push("## Modes");
+			for (const key in modes) {
+				scriptedGames = scriptedGames.concat(modes[key]);
+				scriptedGames.push("\n");
+			}
 			document = document.concat(scriptedGames);
 		}
 

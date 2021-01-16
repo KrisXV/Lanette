@@ -33,8 +33,7 @@ class AbrasAbilitySwitch extends QuestionAndAnswer {
 		}
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		let pokemon = this.sampleOne(data.pokedex);
 		while (pokemon === this.lastPokemon) {
 			pokemon = this.sampleOne(data.pokedex);
@@ -45,7 +44,7 @@ class AbrasAbilitySwitch extends QuestionAndAnswer {
 		let ability = this.sampleOne(data.abilities[id]);
 		while (ability === this.lastAbility) {
 			if (data.abilities[id].length === 1) {
-				await this.setAnswers();
+				this.generateAnswer();
 				return;
 			}
 			ability = this.sampleOne(data.abilities[id]);
@@ -81,7 +80,7 @@ export const game: IGameFile<AbrasAbilitySwitch> = Games.copyTemplateProperties(
 	minigameCommand: 'abilityswitch',
 	minigameCommandAliases: ['aswitch'],
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess a Pokemon with the chosen ability!",
-	modes: ["survival", "team"],
+	modes: ["multianswer", "survival", "team", "timeattack"],
 	modeProperties: {
 		'survival': {
 			roundTime: 8 * 1000,

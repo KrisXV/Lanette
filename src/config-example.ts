@@ -1,4 +1,5 @@
 import type { GroupName } from "./types/client";
+import type { IGameHostBoxPokemon, IGameTrainerCardPokemon } from "./types/config";
 import type { GameDifficulty } from "./types/games";
 
 /* eslint-disable prefer-const*/
@@ -68,6 +69,16 @@ export let subRooms: Dict<string[]> = {};
  * Room aliases that can be used with user input
  */
 export let roomAliases: Dict<string> = {};
+
+/**
+ * For each room in the object, a list of words that will prevent a message from being sent in that room
+ */
+export let roomBannedWords: Dict<string[]> = {};
+
+/**
+ * A list of words that will prevent messages from being sent anywhere
+ */
+export let bannedWords: string[] | null = null;
 
 /**
  * The avatar code to use after logging in
@@ -215,6 +226,11 @@ export let allowUserHostedTournaments: string[] = [];
 export let userHostedTournamentRanks: Dict<{review: GroupName}> = {};
 
 /**
+ * A list of rooms (roomids) where games will award leaderboard points
+ */
+export let rankedGames: string[] = [];
+
+/**
  * A list of rooms (roomids) where scripted games are allowed to be played
  */
 export let allowScriptedGames: string[] = [];
@@ -238,6 +254,36 @@ export let allowOneVsOneGames: string[] = [];
  * A list of rooms (roomids) where game achievements are able to be unlocked
  */
 export let allowGameAchievements: string[] = [];
+
+/**
+ * A list of rooms (roomids) where game trainer cards are shown for winners
+ */
+export let showGameTrainerCards: string[] = [];
+
+/**
+ * For each room in the object, the number of bits that must be earned to customize a game trainer card
+ */
+export let gameTrainerCardRequirements: Dict<{trainer: number, pokemon: IGameTrainerCardPokemon}> = {};
+
+/**
+ * A list of rooms (roomids) where customized game host boxes are shown
+ */
+export let showGameHostBoxes: string[] = [];
+
+/**
+ * For each room in the object, the number of bits that must be earned to customize a game host box
+ */
+export let gameHostBoxRequirements: Dict<{background: number, pokemon: IGameHostBoxPokemon}> = {};
+
+/**
+ * A list of rooms (roomids) where customized game scripted boxes are shown
+ */
+export let showGameScriptedBoxes: string[] = [];
+
+/**
+ * For each room in the object, the number of bits that must be earned to customize a game scripted box
+ */
+export let gameScriptedBoxRequirements: Dict<number> = {};
 
 /**
  * A list of rooms (roomids) where games cannot be hosted back-to-back
@@ -366,4 +412,4 @@ export let githubApiCredentials: Dict<{token: string; username: string}> = {};
  */
 export let gameCatalogGists: Dict<{description: string; files: string[]; id: string}> = {};
 
-/* eslint-enable prefer-const*/
+/* eslint-enable */

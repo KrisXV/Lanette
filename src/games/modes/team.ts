@@ -15,10 +15,13 @@ const removedOptions: string[] = ['points', 'freejoin'];
 type TeamThis = QuestionAndAnswer & Team;
 
 class Team {
+	canLateJoin: boolean = true;
 	currentPlayers: Dict<Player> = {};
 	firstAnswers: Dict<Player | false> = {};
+	lateJoinQueueSize: number = 0;
 	minPlayers: number = 4;
 	playerOrders: Dict<Player[]> = {};
+	queueLateJoins: boolean = true;
 	teamRound: number = 0;
 	teams: Dict<PlayerTeam> = {};
 
@@ -47,7 +50,23 @@ class Team {
 		}
 	}
 
+	onAddLateJoinQueuedPlayers(this: TeamThis, queuedPlayers: Player[]): void {
+		const teams = Object.keys(this.teams);
+		for (const queuedPlayer of queuedPlayers) {
+			queuedPlayer.frozen = false;
+
+			const team = this.teams[teams[0]];
+			teams.shift();
+
+			team.addPlayer(queuedPlayer);
+			this.playerOrders[team.id].push(queuedPlayer);
+			queuedPlayer.say("You are on **Team " + team.name + "** with: " +
+				Tools.joinList(team.getTeammateNames(queuedPlayer)));
+		}
+	}
+
 	setTeams(this: TeamThis): void {
+		this.lateJoinQueueSize = this.format.options.teams;
 		this.teams = this.generateTeams(this.format.options.teams);
 		this.setLargestTeam();
 
@@ -154,11 +173,11 @@ class Team {
 const commandDefinitions: GameCommandDefinitions<TeamThis> = {
 	guess: {
 		// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-		command(target, room, user): GameCommandReturnType {
+		command(target, room, user, cmd, timestamp): GameCommandReturnType {
+			if (this.answerCommands && !this.answerCommands.includes(cmd)) return false;
 			if (!this.canGuessAnswer(this.players[user.id])) return false;
 
 			const player = this.players[user.id];
-			if (!player.active) player.active = true;
 			const answer = this.guessAnswer(player, target);
 			if (!answer || !this.canGuessAnswer(player)) return false;
 
@@ -166,7 +185,7 @@ const commandDefinitions: GameCommandDefinitions<TeamThis> = {
 
 			if (this.onCorrectGuess) this.onCorrectGuess(player, answer);
 
-			const awardedPoints = this.getPointsForAnswer ? this.getPointsForAnswer(answer) : 1;
+			const awardedPoints = this.getPointsForAnswer ? this.getPointsForAnswer(answer, timestamp) : 1;
 			this.addPoints(player, awardedPoints);
 
 			if (this.allAnswersTeamAchievement) {
@@ -219,9 +238,9 @@ const commandDefinitions: GameCommandDefinitions<TeamThis> = {
 	},
 };
 
-const commands = CommandParser.loadCommands(commandDefinitions);
+const commands = CommandParser.loadCommandDefinitions(commandDefinitions);
 
-const initialize = (game: ScriptedGame): void => {
+const initialize = (game: QuestionAndAnswer): void => {
 	const mode = new Team();
 	const propertiesToOverride = Object.getOwnPropertyNames(mode).concat(Object.getOwnPropertyNames(Team.prototype)) as (keyof Team)[];
 	for (const property of propertiesToOverride) {
@@ -233,7 +252,7 @@ const initialize = (game: ScriptedGame): void => {
 };
 
 const tests: GameFileTests<TeamThis> = {
-	'it should advance players who answer correctly': {
+	'it should award points for correct answers': {
 		config: {
 			async: true,
 			commands: [['guess'], ['g']],
@@ -251,8 +270,9 @@ const tests: GameFileTests<TeamThis> = {
 			const currentPlayer = game.currentPlayers[team.id];
 			assert(currentPlayer);
 			game.canGuess = true;
-			const expectedPoints = game.getPointsForAnswer ? game.getPointsForAnswer(game.answers[0]) : 1;
-			runCommand(attributes.commands![0], game.answers[0], game.room, currentPlayer.name);
+			const expectedPoints = game.getPointsForAnswer ? game.getPointsForAnswer(game.answers[0], Date.now()) : 1;
+			runCommand(game.answerCommands ? game.answerCommands[0] : attributes.commands![0], game.answers[0], game.room,
+				currentPlayer.name);
 			assertStrictEqual(game.points.get(currentPlayer), expectedPoints);
 			assertStrictEqual(team.points, expectedPoints);
 		},

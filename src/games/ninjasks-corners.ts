@@ -16,14 +16,17 @@ class NinjasksCorners extends ScriptedGame {
 	color: string = '';
 	firstTravel: Player | false | undefined;
 	lastColor: string = '';
+	maxRound: number = 15;
 	minRoundTime: number = 1.8 * 1000;
 	points = new Map<Player, number>();
-	roundLimit: number = 15;
 	roundTime: number = 4 * 1000;
 	roundTravels = new Map<Player, string>();
 
 	onSignups(): void {
-		if (this.format.options.freejoin) this.timeout = setTimeout(() => this.nextRound(), 5000);
+		if (this.format.options.freejoin) {
+			this.maxRound = 0;
+			this.timeout = setTimeout(() => this.nextRound(), 5000);
+		}
 	}
 
 	onStart(): void {
@@ -51,7 +54,7 @@ class NinjasksCorners extends ScriptedGame {
 				}
 			});
 
-			if (this.getRemainingPlayerCount() < 2 || this.round > this.roundLimit) return this.end();
+			if (this.getRemainingPlayerCount() < 2) return this.end();
 		}
 
 		let color = this.sampleOne(colors);

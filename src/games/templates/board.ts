@@ -2,13 +2,13 @@ import type { Player } from "../../room-activity";
 import { ScriptedGame } from "../../room-game-scripted";
 import { assert, assertStrictEqual } from "../../test/test-tools";
 import type { GameFileTests, IGameTemplateFile, PlayerList } from "../../types/games";
-import type { HexColor } from "../../types/tools";
+import type { NamedHexCode } from "../../types/tools";
 
 export class BoardSpace {
 	name: string;
-	color: HexColor;
+	color: NamedHexCode;
 
-	constructor(name: string, color: HexColor) {
+	constructor(name: string, color: NamedHexCode) {
 		this.name = name;
 		this.color = color;
 	}
@@ -53,8 +53,6 @@ export abstract class BoardGame extends ScriptedGame {
 	playerLetters = new Map<Player, string>();
 	playerOrder: Player[] = [];
 	currentPlayerReRoll: boolean = false;
-
-	timeLimit?: number;
 
 	abstract getSpaceHtml(side: BoardSide, space: number, playerLocations: KeyedDict<BoardSide, Dict<Player[]>>): string;
 	abstract onNextPlayer(player: Player): void;
@@ -125,13 +123,6 @@ export abstract class BoardGame extends ScriptedGame {
 	onNextRound(): void {
 		if (this.getRemainingPlayerCount() < 2) return this.end();
 		if (!this.playerList.length) {
-			if (this.timeLimit && Date.now() - this.startTime! >= this.timeLimit) {
-				this.say("Time is up!");
-				if (this.onTimeLimit) this.onTimeLimit();
-				this.end();
-				return;
-			}
-
 			this.boardRound++;
 			this.playerList = this.playerOrder.slice();
 			const uhtmlName = this.uhtmlBaseName + '-round';
@@ -232,6 +223,7 @@ export abstract class BoardGame extends ScriptedGame {
 		}
 
 		this.currentPlayerReRoll = rollAmount / this.dice.length === this.dice[0];
+		if (!this.currentPlayerReRoll) this.doubleRolls = 1;
 
 		const location = this.playerLocations.get(player)!;
 		const locationAfterMovement = this.getLocationAfterMovement(location, rollAmount);
@@ -248,7 +240,6 @@ export abstract class BoardGame extends ScriptedGame {
 	}
 
 	onPlayerRoll?(player: Player): boolean;
-	onTimeLimit?(): void;
 }
 
 const tests: GameFileTests<BoardGame> = {

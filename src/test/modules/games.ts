@@ -72,7 +72,6 @@ function createIndividualTests(format: IGameFormat, tests: GameFileTests): void 
 				it(test, async function(this: Mocha.Context) {
 					const game = createIndividualTestGame(testFormat);
 					try {
-						// eslint-disable-next-line @typescript-eslint/await-thenable
 						await ((testData.test.call(this, game, testFormat, attributes) as unknown) as Promise<void>).catch(e => {
 							throw e;
 						});
@@ -114,8 +113,7 @@ for (const format of formatsToTest) {
 						if (room.game) room.game.deallocate(true);
 					});
 
-					// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-					createIndividualTests(variantFormat as IGameFormat, format.tests!);
+					createIndividualTests(variantFormat, format.tests!);
 				});
 			}
 		}
@@ -261,6 +259,11 @@ describe("Games", () => {
 		assertStrictEqual(Games.getExistingFormat('trivia, abilities, survival').nameWithOptions, "Slowking's Ability Trivia Survival");
 		assertStrictEqual(Games.getExistingFormat('trivia, abilities, surv').nameWithOptions, "Slowking's Ability Trivia Survival");
 
+		assertStrictEqual(Games.getExistingFormat('upc').nameWithOptions, "Unown's Pokemon Chain");
+		assertStrictEqual(Games.getExistingFormat('upc, fj').nameWithOptions, "Unown's Pokemon Chain (freejoin)");
+		assertStrictEqual(Games.getExistingFormat('umc').nameWithOptions, "Unown's Move Chain");
+		assertStrictEqual(Games.getExistingFormat('umc, fj').nameWithOptions, "Unown's Move Chain (freejoin)");
+
 		assertStrictEqual(Games.getExistingFormat('params, survival').nameWithOptions, "Paras' Parameters Survival");
 		assertStrictEqual(Games.getExistingFormat('params, team').nameWithOptions, "Team Paras' Parameters");
 
@@ -328,8 +331,7 @@ describe("Games", () => {
 			if (game.mascot) game.shinyMascot = true;
 			game.signups();
 			gameLog.push(roomPrefix + "/addhtmlbox " + game.getSignupsHtml());
-			gameLog.push(roomPrefix + "/notifyrank all, Mocha scripted game," + format.name + "," + Games.scriptedGameHighlight +
-				" " + game.name);
+			gameLog.push(roomPrefix + "/notifyrank all, Mocha scripted game," + format.name + "," + game.getHighlightPhrase());
 			if (game.mascot) gameLog.push(roomPrefix + game.mascot.name + " is shiny so bits will be doubled!");
 
 			assertClientSendQueue(startingSendQueueIndex, gameLog);
@@ -359,8 +361,8 @@ describe("Games", () => {
 			assertStrictEqual(game.format.name, format.name);
 			game.signups();
 			gameLog.push(roomPrefix + "/addhtmlbox " + game.getSignupsHtml());
-			gameLog.push(roomPrefix + "/notifyrank all, Mocha user-hosted game," + game.name + "," + game.hostName + " " +
-				Games.userHostedGameHighlight + " " + game.name);
+			gameLog.push(roomPrefix + "/notifyrank all, Mocha user-hosted game," + game.name + "," + game.hostId + " " +
+				game.getHighlightPhrase());
 
 			assertClientSendQueue(startingSendQueueIndex, gameLog);
 			game.deallocate(true);

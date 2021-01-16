@@ -42,6 +42,25 @@ describe("Tools", () => {
 		objectArrayClone.letters[0] = 'b';
 		assertStrictEqual(objectArray.letters[0], 'a');
 	});
+	it('should return proper values from containsInteger()', () => {
+		assert(Tools.containsInteger('0'));
+		assert(Tools.containsInteger('1'));
+		assert(Tools.containsInteger('01'));
+		assert(Tools.containsInteger('10'));
+		assert(Tools.containsInteger('-1'));
+		assert(Tools.containsInteger('0.1'));
+		assert(Tools.containsInteger('-0.1'));
+		assert(!Tools.containsInteger('a'));
+		assert(!Tools.containsInteger('-a'));
+		assert(Tools.containsInteger('0a'));
+		assert(Tools.containsInteger('-0a'));
+		assert(Tools.containsInteger('a0'));
+		assert(Tools.containsInteger('-a0'));
+		assert(!Tools.containsInteger(''));
+		assert(!Tools.containsInteger(' '));
+		assert(!Tools.containsInteger('-'));
+		assert(!Tools.containsInteger('@'));
+	});
 	it('should return proper values from isInteger()', () => {
 		assert(Tools.isInteger('0'));
 		assert(Tools.isInteger('1'));
@@ -59,6 +78,7 @@ describe("Tools", () => {
 		assert(!Tools.isInteger(''));
 		assert(!Tools.isInteger(' '));
 		assert(!Tools.isInteger('-'));
+		assert(!Tools.isInteger('@'));
 	});
 	it('should return proper values from isFloat()', () => {
 		assert(Tools.isFloat('0'));
@@ -77,6 +97,7 @@ describe("Tools", () => {
 		assert(!Tools.isFloat(''));
 		assert(!Tools.isFloat(' '));
 		assert(!Tools.isFloat('-'));
+		assert(!Tools.isFloat('@'));
 	});
 	it('should return proper values from toDurationString()', () => {
 		assertStrictEqual(Tools.toDurationString(second), '1 second');
@@ -176,12 +197,12 @@ describe("Tools", () => {
 		}
 	});
 	it('should have proper typeHexColors and pokemonColorHexColors lists', () => {
-		for (const i in Tools.typeHexColors) {
-			assert(Tools.typeHexColors[i] in Tools.hexColorCodes, i);
+		for (const i in Tools.typeHexCodes) {
+			assert(Tools.typeHexCodes[i] in Tools.hexCodes, i);
 		}
 
-		for (const i in Tools.pokemonColorHexColors) {
-			assert(Tools.pokemonColorHexColors[i] in Tools.hexColorCodes, i);
+		for (const i in Tools.pokemonColorHexCodes) {
+			assert(Tools.pokemonColorHexCodes[i] in Tools.hexCodes, i);
 		}
 	});
 	it('should properly generate permutations', () => {

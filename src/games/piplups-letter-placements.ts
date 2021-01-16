@@ -32,7 +32,7 @@ class PiplupsLetterPlacements extends QuestionAndAnswer {
 		data["Pokemon Moves"] = Games.getMovesList(x => x.name.length > 3).map(x => x.name);
 	}
 
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const category = (this.roundCategory || this.sampleOne(categories)) as DataKey;
 		let randomAnswer = Tools.toId(this.sampleOne(data[category]));
 		while (randomAnswer === this.lastAnswer) {
@@ -42,16 +42,17 @@ class PiplupsLetterPlacements extends QuestionAndAnswer {
 
 		const startingPosition = this.random(randomAnswer.length - 2);
 		const letters = randomAnswer.substr(startingPosition, 3);
-		if (Client.willBeFiltered(letters, this.isPm(this.room) ? undefined : this.room)) {
-			await this.setAnswers();
+		if (Client.checkFilters(letters, this.isPm(this.room) ? undefined : this.room)) {
+			this.generateAnswer();
 			return;
 		}
 
-		this.answers = [];
+		const answers: string[] = [];
 		for (const answer of data[category]) {
-			if (Tools.toId(answer).includes(letters)) this.answers.push(answer);
+			if (Tools.toId(answer).includes(letters)) answers.push(answer);
 		}
 
+		this.answers = answers;
 		this.hint = '<b>' + category + '</b>: <i>' + letters + '</i>';
 	}
 }
@@ -65,7 +66,7 @@ export const game: IGameFile<PiplupsLetterPlacements> = Games.copyTemplateProper
 	freejoin: true,
 	name: "Piplup's Letter Placements",
 	mascot: "Piplup",
-	modes: ['survival', 'team'],
+	modes: ['multianswer', 'survival', 'team', 'timeattack'],
 	minigameCommand: 'placement',
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess an answer that contains the given letters " +
 		"back-to-back!",

@@ -1,6 +1,18 @@
+import type { Room } from "../rooms";
 import type { IFormat } from "./pokemon-showdown";
 import type { RoomType } from "./rooms";
 import type { ITournamentEndJson, ITournamentUpdateJson } from "./tournaments";
+
+export type IMessageParserFunction = (room: Room, messageType: keyof IClientMessageTypes, messageParts: readonly string[], now: number) =>
+	// eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+	true | void;
+
+export interface IMessageParserFile {
+	/**Return `true` to prevent a message from being parsed by other parsers and Client */
+	parseMessage: IMessageParserFunction;
+	/**Message parsers with higher priority will run before others, potentially preventing their execution */
+	priority: number;
+}
 
 export type IMessageTypes = 'command' | 'chat' | 'html' | 'uhtml' | 'pm' | 'pmhtml' | 'pmuhtml';
 export interface IOutgoingMessage {
@@ -9,6 +21,8 @@ export interface IOutgoingMessage {
 	html?: string;
 	measure?: boolean;
 	sentTime?: number;
+	serverLatency?: number;
+	serverProcessingTime?: number;
 	text?: string;
 	uhtmlName?: string;
 	user?: string;
@@ -83,6 +97,8 @@ export interface IChatLogEntry {
 	uhtmlName?: string;
 }
 
+export type MessageListener = (timestamp: number) => void;
+
 export interface IClientMessageTypes {
 	/**
 	 * Global messages
@@ -131,9 +147,24 @@ export interface IClientMessageTypes {
 		readonly type: RoomType;
 	};
 
+	/**
+	 * Room title
+	 */
+	title: {
+		readonly title: string;
+	}
+
 	deinit: null;
 
-	noinit: null;
+	/**
+	 * Reason or action
+	 */
+	noinit: {
+		/** joinfailed, nonexistent, namerequired or rename */
+		readonly action: string;
+		readonly newId: string;
+		readonly newTitle: string;
+	};
 
 	/**
 	 * Groups list

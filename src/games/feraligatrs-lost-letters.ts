@@ -24,7 +24,6 @@ class FeraligatrsLostLetters extends QuestionAndAnswer {
 	allAnswersAchievement = FeraligatrsLostLetters.achievements.alphabetsweep;
 	categoryList: DataKey[] = categories.slice();
 	inverseLostLetters: boolean = false;
-	roundTime: number = 10 * 1000;
 
 	static loadData(): void {
 		data["Characters"] = Dex.getCharacters().filter(x => x.length > 3);
@@ -66,14 +65,14 @@ class FeraligatrsLostLetters extends QuestionAndAnswer {
 		return newLetters.join('');
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		let category: DataKey;
 		if (this.roundCategory) {
 			category = this.roundCategory as DataKey;
 		} else {
 			category = this.sampleOne(this.categoryList);
 		}
+
 		let answer: string = '';
 		let hint: string = '';
 		while (!answer) {
@@ -81,15 +80,19 @@ class FeraligatrsLostLetters extends QuestionAndAnswer {
 			if (!name || name.endsWith('-Mega')) continue;
 			name = name.trim();
 			hint = this.removeLetters(name.split(''));
-			if (!hint || hint.length === name.length || Client.willBeFiltered(hint)) continue;
+			if (!hint || hint.length === name.length ||
+				Client.checkFilters(hint, !this.isPm(this.room) ? this.room : undefined)) continue;
 			answer = name;
 		}
-		this.answers = [answer];
+
+		const answers: string[] = [answer];
 		for (let name of data[category]) {
 			name = name.trim();
 			if (name === answer) continue;
-			if (this.removeLetters(name.split('')) === hint) this.answers.push(name);
+			if (this.removeLetters(name.split('')) === hint) answers.push(name);
 		}
+
+		this.answers = answers;
 		this.hint = '<b>' + category + '</b>: <i>' + hint + '</i>';
 	}
 }
@@ -106,7 +109,7 @@ export const game: IGameFile<FeraligatrsLostLetters> = Games.copyTemplatePropert
 	mascot: "Feraligatr",
 	minigameCommand: 'lostletter',
 	minigameCommandAliases: ['lletter'],
-	modes: ['team'],
+	modes: ['team', 'timeattack'],
 	variants: [
 		{
 			name: "Feraligatr's Ability Lost Letters",

@@ -283,11 +283,11 @@ class BulbasaursUno extends CardMatching<ActionCardsType> {
 		},
 	};
 	colorsLimit: number = 20;
-	drawAchievement = BulbasaursUno.achievements.drawwizard;
-	drawAchievementAmount = drawWizardAmount;
 	finitePlayerCards: boolean = true;
 	playerCards = new Map<Player, IPokemonCard[]>();
 	shinyCardAchievement = BulbasaursUno.achievements.luckofthedraw;
+	skippedPlayerAchievement = BulbasaursUno.achievements.drawwizard;
+	skippedPlayerAchievementAmount = drawWizardAmount;
 	typesLimit: number = 20;
 	usesColors: boolean = true;
 
@@ -402,7 +402,7 @@ class BulbasaursUno extends CardMatching<ActionCardsType> {
 		this.awaitingCurrentPlayerCard = false;
 		if (cards.includes(card)) cards.splice(cards.indexOf(card), 1);
 
-		this.storePreviouslyPlayedCard({card: card.displayName || card.name, detail: cardDetail, shiny: firstTimeShiny});
+		this.storePreviouslyPlayedCard({card: card.name, player: player.name, detail: cardDetail, shiny: firstTimeShiny});
 		this.currentPlayer = null;
 
 		let drawnCards: ICard[] | undefined;

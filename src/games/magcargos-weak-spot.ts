@@ -55,7 +55,7 @@ class MagcargosWeakSpot extends QuestionAndAnswer {
 		}
 	}
 
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const typeKeys: string[] = this.inverseTypes ? data.inverseTypeKeys : data.typeKeys;
 		const typeWeaknesses: Dict<string[]> = this.inverseTypes ? data.inverseTypeWeaknesses : data.typeWeaknesses;
 		let type = this.sampleOne(typeKeys);
@@ -87,7 +87,7 @@ class MagcargosWeakSpot extends QuestionAndAnswer {
 			}
 		}
 		if (containsPreviousAnswer) {
-			await this.setAnswers();
+			this.generateAnswer();
 			return;
 		}
 
@@ -108,7 +108,7 @@ export const game: IGameFile<MagcargosWeakSpot> = Games.copyTemplateProperties(q
 	freejoin: true,
 	name: "Magcargo's Weak Spot",
 	mascot: "Magcargo",
-	modes: ['survival', 'team'],
+	modes: ['multianswer', 'survival', 'team', 'timeattack'],
 	variants: [
 		{
 			name: "Magcargo's Inverse Weak Spot",

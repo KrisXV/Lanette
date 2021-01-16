@@ -4,6 +4,7 @@ import type { Player } from "./room-activity";
 import { Game } from "./room-game";
 import type { Room } from "./rooms";
 import type {
+	DefaultGameOption,
 	GameCommandListener, GameCommandReturnType, IBattleGameData, IGameAchievement, IGameCommandCountListener, IGameCommandCountOptions,
 	IGameFormat, IGameMode, IGameOptionValues, IGameVariant, IRandomGameAnswer, LoadedGameCommands, PlayerList
 } from "./types/games";
@@ -13,7 +14,7 @@ const JOIN_BITS = 10;
 const AUTO_START_VOTE_TIME = 5 * 1000;
 
 // base of 0 defaults option to 'off'
-const defaultOptionValues: Dict<IGameOptionValues> = {
+const defaultOptionValues: KeyedDict<DefaultGameOption, IGameOptionValues> = {
 	points: {min: 10, base: 10, max: 10},
 	teams: {min: 2, base: 2, max: 4},
 	cards: {min: 4, base: 5, max: 6},
@@ -26,12 +27,15 @@ export class ScriptedGame extends Game {
 	canLateJoin: boolean = false;
 	readonly commands = Object.assign(Object.create(null), Games.sharedCommands) as LoadedGameCommands;
 	readonly commandsListeners: IGameCommandCountListener[] = [];
+	inactiveRounds: number = 0;
 	inheritedPlayers: boolean = false;
 	internalGame: boolean = false;
+	lateJoinQueue: Player[] = [];
 	readonly loserPointsToBits: number = 10;
-	readonly maxBits: number = 1000;
+	readonly maxBits: number = 500;
 	notifyRankSignups: boolean = false;
 	parentGame: ScriptedGame | undefined;
+	startTime: number = 0;
 	usesHtmlPage: boolean = false;
 	usesWorkers: boolean = false;
 	readonly winnerPointsToBits: number = 50;
@@ -41,17 +45,21 @@ export class ScriptedGame extends Game {
 
 	additionalDescription?: string;
 	allowChildGameBits?: boolean;
-	readonly battleData?: Dict<IBattleGameData>;
+	readonly battleData?: Map<Room, IBattleGameData>;
 	readonly battleRooms?: string[];
 	commandDescriptions?: string[];
 	isMiniGame?: boolean;
+	lateJoinQueueSize?: number;
 	readonly lives?: Map<Player, number>;
 	maxRound?: number;
 	noForceEndMessage?: boolean;
 	playerInactiveRoundLimit?: number;
+	queueLateJoins?: boolean;
 	shinyMascot?: boolean;
 	startingLives?: number;
 	subGameNumber?: number;
+	timeEnded?: boolean;
+	timeLimit?: number;
 
 	constructor(room: Room | User, pmRoom?: Room, initialSeed?: PRNGSeed) {
 		super(room, pmRoom, initialSeed);
@@ -105,13 +113,14 @@ export class ScriptedGame extends Game {
 			customizedOptions[i] = optionValue;
 		}
 
-		if (customizedOptions.points) nameSuffixes.push(" (first to " + customizedOptions.points + ")");
+		if (customizedOptions.points) nameSuffixes.push("(first to " + customizedOptions.points + ")");
 		if (customizedOptions.teams) namePrefixes.unshift('' + customizedOptions.teams);
 		if (customizedOptions.cards) namePrefixes.unshift(customizedOptions.cards + "-card");
 		if (customizedOptions.gen) namePrefixes.unshift('Gen ' + customizedOptions.gen);
 		if (customizedOptions.ports) namePrefixes.unshift(customizedOptions.ports + '-port');
 		if (customizedOptions.params) namePrefixes.unshift(customizedOptions.params + '-param');
 		if (customizedOptions.names) namePrefixes.unshift(customizedOptions.names + '-name');
+		if (customizedOptions.freejoin && !format.freejoin) nameSuffixes.push("(freejoin)");
 
 		let nameWithOptions = '';
 		if (namePrefixes.length) nameWithOptions = namePrefixes.join(" ") + " ";
@@ -127,10 +136,34 @@ export class ScriptedGame extends Game {
 		return options;
 	}
 
+	setUhtmlBaseName(): void {
+		let gameCount: number;
+		if (this.isPm(this.room)) {
+			gameCount = this.random(100);
+		} else {
+			let databaseKey: 'miniGameCounts' | 'scriptedGameCounts';
+			if (this.isMiniGame) {
+				databaseKey = 'miniGameCounts';
+			} else {
+				databaseKey = 'scriptedGameCounts';
+			}
+
+			const database = Storage.getDatabase(this.room);
+			if (!database[databaseKey]) database[databaseKey] = {};
+			if (!(this.format.id in database[databaseKey]!)) database[databaseKey]![this.format.id] = 0;
+			database[databaseKey]![this.format.id]++;
+			gameCount = database[databaseKey]![this.format.id];
+		}
+
+		this.uhtmlBaseName = (this.isMiniGame ? "mini" : "scripted") + "-" + this.format.id + "-" + gameCount;
+		this.signupsUhtmlName = this.uhtmlBaseName + "-signups";
+		this.joinLeaveButtonUhtmlName = this.uhtmlBaseName + "-join-leave";
+	}
+
 	onInitialize(format: IGameFormat): void {
 		this.format = format;
 		this.baseHtmlPageId = this.room.id + "-" + this.format.id;
-		this.setUhtmlBaseName('scripted');
+		this.setUhtmlBaseName();
 
 		if (format.commands) Object.assign(this.commands, format.commands);
 		if (format.commandDescriptions) this.commandDescriptions = format.commandDescriptions;
@@ -189,22 +222,20 @@ export class ScriptedGame extends Game {
 	}
 
 	getDescriptionHtml(): string {
-		let html = "<center>";
-		if (this.mascot) {
-			const gif = Dex.getPokemonGif(this.mascot, "xy", 'front', this.shinyMascot);
-			if (gif) html += gif;
-		}
-		html += "<h3>" + this.name + "</h3>" + this.getDescription();
-		if (this.additionalDescription) html += "<br /><br />" + this.additionalDescription;
+		let description = this.getDescription();
+		if (this.additionalDescription) description += "<br /><br />" + this.additionalDescription;
+
 		let commandDescriptions: string[] = [];
 		if (this.getPlayerSummary) commandDescriptions.push(Config.commandCharacter + "summary");
 		if (this.commandDescriptions) commandDescriptions = commandDescriptions.concat(this.commandDescriptions);
 		if (commandDescriptions.length) {
-			html += "<br /><b>Command" + (commandDescriptions.length > 1 ? "s" : "") + "</b>: " +
+			description += "<br /><b>Command" + (commandDescriptions.length > 1 ? "s" : "") + "</b>: " +
 				commandDescriptions.map(x => "<code>" + x + "</code>").join(", ");
 		}
-		html += "</center>";
-		return html;
+
+		return Games.getScriptedBoxHtml(this.room as Room, this.name, this.format.voter, description, this.mascot, this.shinyMascot,
+			!this.internalGame && !this.parentGame ? this.getHighlightPhrase() : "",
+			this.format.mode ? this.getModeHighlightPhrase() : "");
 	}
 
 	getSignupsHtml(): string {
@@ -227,9 +258,26 @@ export class ScriptedGame extends Game {
 
 	inactivityEnd(): void {
 		this.say("Ending the game due to a lack of players.");
-		Games.banFromNextVote(this.room as Room, this.format);
-		Games.setAutoCreateTimer(this.room as Room, 'scripted', AUTO_START_VOTE_TIME);
+		if (!this.parentGame && !this.internalGame) {
+			Games.banFromNextVote(this.room as Room, this.format);
+			Games.setAutoCreateTimer(this.room as Room, 'scripted', AUTO_START_VOTE_TIME);
+		}
 		this.deallocate(false);
+	}
+
+	errorEnd(): void {
+		this.say("Ending the game due to an error.");
+		Games.disableFormat(this.format);
+		this.deallocate(false);
+	}
+
+	getHighlightPhrase(): string {
+		return Games.scriptedGameHighlight + " " + this.id;
+	}
+
+	getModeHighlightPhrase(): string {
+		if (!this.format.mode) return "";
+		return Games.scriptedGameHighlight + " " + this.format.mode.id;
 	}
 
 	signups(): void {
@@ -253,11 +301,25 @@ export class ScriptedGame extends Game {
 			this.sayUhtml(this.joinLeaveButtonUhtmlName, joinLeaveHtml);
 			this.notifyRankSignups = true;
 			this.sayCommand("/notifyrank all, " + (this.room as Room).title + " scripted game," + this.name + "," +
-				Games.scriptedGameHighlight + " " + this.name, true);
+				this.getHighlightPhrase(), true);
+			if (this.format.mode) {
+				this.sayCommand("/notifyrank all, " + (this.room as Room).title + " scripted game," + this.name + "," +
+					this.getModeHighlightPhrase(), true);
+			}
 		}
 
 		if (this.shinyMascot) this.say(this.mascot!.name + " is shiny so bits will be doubled!");
-		if (this.onSignups) this.onSignups();
+
+		if (this.onSignups) {
+			try {
+				this.onSignups();
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onSignups()");
+				this.errorEnd();
+				return;
+			}
+		}
 
 		if (this.format.options.freejoin) {
 			this.started = true;
@@ -288,7 +350,7 @@ export class ScriptedGame extends Game {
 	}
 
 	start(): boolean {
-		if (this.minPlayers && this.playerCount < this.minPlayers) return false;
+		if (this.started || (this.minPlayers && this.playerCount < this.minPlayers)) return false;
 
 		if (this.startTimer) clearTimeout(this.startTimer);
 		this.started = true;
@@ -300,23 +362,74 @@ export class ScriptedGame extends Game {
 		}
 
 		if (!this.internalGame) this.say(this.name + " is starting! **Players (" + this.playerCount + ")**: " + this.getPlayerNames());
-		if (this.onStart) this.onStart();
+
+		if (this.onStart) {
+			try {
+				this.onStart();
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onStart()");
+				this.errorEnd();
+			}
+		}
 
 		return true;
 	}
 
 	nextRound(): void {
+		if (this.ended) throw new Error("nextRound() called after game ended");
 		if (this.timeout) clearTimeout(this.timeout);
 
 		// @ts-expect-error
 		this.round++;
 		if (this.maxRound && this.round > this.maxRound) {
-			if (this.onMaxRound) this.onMaxRound();
+			if (this.onMaxRound) {
+				try {
+					this.onMaxRound();
+				} catch (e) {
+					console.log(e);
+					Tools.logError(e, this.format.name + " onMaxRound()");
+					this.errorEnd();
+				}
+			}
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 			if (!this.ended) this.end();
 			return;
 		}
 
-		if (this.onNextRound) this.onNextRound();
+		if (this.timeLimit && (Date.now() - this.startTime) >= this.timeLimit) {
+			let timeEnded = false;
+			if (this.onTimeLimit) {
+				try {
+					if (this.onTimeLimit()) timeEnded = true;
+				} catch (e) {
+					console.log(e);
+					Tools.logError(e, this.format.name + " onTimeLimit()");
+					this.errorEnd();
+					return;
+				}
+			} else {
+				timeEnded = true;
+			}
+
+			if (timeEnded) {
+				this.say("The game has reached the time limit!");
+				this.timeEnded = true;
+				// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+				if (!this.ended) this.end();
+				return;
+			}
+		}
+
+		if (this.onNextRound) {
+			try {
+				this.onNextRound();
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onNextRound()");
+				this.errorEnd();
+			}
+		}
 	}
 
 	getRoundHtml(getAttributes: (players: PlayerList) => string, players?: PlayerList | null, roundText?: string,
@@ -345,6 +458,9 @@ export class ScriptedGame extends Game {
 	}
 
 	end(): void {
+		if (this.ended) throw new Error("Game already ended");
+		this.ended = true;
+
 		if (this.isPm(this.room)) {
 			this.deallocate(false);
 			return;
@@ -356,7 +472,16 @@ export class ScriptedGame extends Game {
 			}
 		}
 
-		if (this.onEnd) this.onEnd();
+		if (this.onEnd) {
+			try {
+				this.onEnd();
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onEnd()");
+				this.errorEnd();
+				return;
+			}
+		}
 
 		const now = Date.now();
 		let usedDatabase = false;
@@ -403,7 +528,15 @@ export class ScriptedGame extends Game {
 			}
 		}
 
-		if (this.onForceEnd) this.onForceEnd(user, reason);
+		if (this.onForceEnd) {
+			try {
+				this.onForceEnd(user, reason);
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onForceEnd()");
+			}
+		}
+
 		this.ended = true;
 		this.deallocate(true);
 	}
@@ -417,7 +550,16 @@ export class ScriptedGame extends Game {
 		if (this.startTimer) clearTimeout(this.startTimer);
 
 		if ((!this.started || this.format.options.freejoin) && this.notifyRankSignups) this.sayCommand("/notifyoffrank all");
-		if (this.onDeallocate) this.onDeallocate(forceEnd);
+
+		if (this.onDeallocate) {
+			try {
+				this.onDeallocate(forceEnd);
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onDeallocate()");
+			}
+		}
+
 		if (this.room.game === this) delete this.room.game;
 
 		if (this.parentGame) {
@@ -426,7 +568,14 @@ export class ScriptedGame extends Game {
 			if (this.parentGame.onChildEnd) this.parentGame.onChildEnd(this.winners);
 		}
 
-		if (this.onAfterDeallocate) this.onAfterDeallocate(forceEnd);
+		if (this.onAfterDeallocate) {
+			try {
+				this.onAfterDeallocate(forceEnd);
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onAfterDeallocate()");
+			}
+		}
 	}
 
 	inheritPlayers(players: Dict<Player>): void {
@@ -434,7 +583,16 @@ export class ScriptedGame extends Game {
 
 		for (const i in players) {
 			this.players[i] = players[i];
-			if (this.onAddPlayer && !this.format.options.freejoin) this.onAddPlayer(this.players[i]);
+			if (this.onAddPlayer && !this.format.options.freejoin) {
+				try {
+					this.onAddPlayer(this.players[i]);
+				} catch (e) {
+					console.log(e);
+					Tools.logError(e, this.format.name + " onAddPlayer()");
+					this.errorEnd();
+					return;
+				}
+			}
 			this.playerCount++;
 		}
 	}
@@ -447,13 +605,71 @@ export class ScriptedGame extends Game {
 
 		const player = this.createPlayer(user);
 		if (!player) {
-			if (this.onAddExistingPlayer) this.onAddExistingPlayer(this.players[user.id]);
+			if (this.onAddExistingPlayer) {
+				try {
+					this.onAddExistingPlayer(this.players[user.id]);
+				} catch (e) {
+					console.log(e);
+					Tools.logError(e, this.format.name + " onAddExistingPlayer()");
+					this.errorEnd();
+				}
+			}
 			return;
 		}
 
-		if ((this.started && (!this.canLateJoin || (this.playerCap && this.playerCount >= this.playerCap))) ||
-			(this.onAddPlayer && !this.onAddPlayer(player, this.started))) {
+		if (this.started && (!this.canLateJoin || (this.playerCap && this.playerCount >= this.playerCap))) {
 			this.destroyPlayer(user, true);
+			return;
+		}
+
+		let addPlayerResult: boolean | undefined = true;
+		if (this.onAddPlayer) {
+			try {
+				addPlayerResult = this.onAddPlayer(player, this.started);
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onAddPlayer()");
+				this.errorEnd();
+				return;
+			}
+		}
+
+		if (!addPlayerResult) {
+			this.destroyPlayer(user, true);
+			return;
+		}
+
+		if (this.started && this.queueLateJoins) {
+			this.lateJoinQueue.push(player);
+			if (this.lateJoinQueue.length === this.lateJoinQueueSize) {
+				for (const listener of this.commandsListeners) {
+					if (listener.remainingPlayersMax) this.increaseOnCommandsMax(listener, this.lateJoinQueueSize);
+				}
+
+				const queuedPlayers = this.lateJoinQueue.slice(0, this.lateJoinQueueSize);
+				for (const queuedPlayer of queuedPlayers) {
+					queuedPlayer.frozen = false;
+					queuedPlayer.say("You are now in the game!");
+					this.lateJoinQueue.splice(this.lateJoinQueue.indexOf(queuedPlayer, 1));
+				}
+
+				if (this.onAddLateJoinQueuedPlayers) {
+					try {
+						this.onAddLateJoinQueuedPlayers(queuedPlayers);
+					} catch (e) {
+						console.log(e);
+						Tools.logError(e, this.format.name + " onAddLateJoinQueuedPlayers()");
+						this.errorEnd();
+						return;
+					}
+				}
+			} else {
+				player.frozen = true;
+				const playersNeeded = this.lateJoinQueueSize! - this.lateJoinQueue.length;
+				player.say("You have added to the late-join queue! " + playersNeeded + " more player" +
+					(playersNeeded > 1 ? "s need" : " needs") + " to late-join for you to play.");
+			}
+
 			return;
 		}
 
@@ -509,7 +725,17 @@ export class ScriptedGame extends Game {
 			}
 		}
 
-		if (this.onRemovePlayer) this.onRemovePlayer(player);
+		if (this.onRemovePlayer) {
+			try {
+				this.onRemovePlayer(player);
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onRemovePlayer()");
+				this.errorEnd();
+				return;
+			}
+		}
+
 		if (!this.internalGame) this.removeBits(player, JOIN_BITS, silent);
 		if (this.usesHtmlPage) player.closeHtmlPage();
 	}
@@ -526,7 +752,16 @@ export class ScriptedGame extends Game {
 	eliminatePlayer(player: Player, eliminationCause?: string | null, eliminator?: Player | null): void {
 		player.eliminated = true;
 		player.say((eliminationCause ? eliminationCause + " " : "") + "You have been eliminated from the game.");
-		if (this.onEliminatePlayer) this.onEliminatePlayer(player, eliminationCause, eliminator);
+
+		if (this.onEliminatePlayer) {
+			try {
+				this.onEliminatePlayer(player, eliminationCause, eliminator);
+			} catch (e) {
+				console.log(e);
+				Tools.logError(e, this.format.name + " onEliminatePlayer()");
+				this.errorEnd();
+			}
+		}
 	}
 
 	getCommandsAndAliases(commands: string[]): string[] {
@@ -600,7 +835,7 @@ export class ScriptedGame extends Game {
 		if (commandListener) this.commandsListeners.splice(this.commandsListeners.indexOf(commandListener, 1));
 	}
 
-	tryCommand(target: string, room: Room | User, user: User, command: string): boolean {
+	tryCommand(target: string, room: Room | User, user: User, command: string, timestamp: number): boolean {
 		if (!(command in this.commands) || (!this.started && !this.commands[command].signupsGameCommand)) return false;
 
 		let canUseCommands = true;
@@ -628,7 +863,16 @@ export class ScriptedGame extends Game {
 			if (commandDefinition.pmOnly) return false;
 		}
 
-		const result: GameCommandReturnType = commandDefinition.command.call(this, target, room, user, command);
+		let result: GameCommandReturnType = false;
+		try {
+			result = commandDefinition.command.call(this, target, room, user, command, timestamp);
+		} catch (e) {
+			console.log(e);
+			Tools.logError(e, this.format.name + " command " + command);
+			this.errorEnd();
+			return false;
+		}
+
 		if (!result) return false;
 
 		const triggeredListeners: IGameCommandCountListener[] = [];
@@ -639,7 +883,15 @@ export class ScriptedGame extends Game {
 				commandListener.lastUserId = user.id;
 
 				if (commandListener.count >= commandListener.max) {
-					commandListener.listener(commandListener.lastUserId);
+					try {
+						commandListener.listener(commandListener.lastUserId);
+					} catch (e) {
+						console.log(e);
+						Tools.logError(e, this.format.name + " command listener for [" + commandListener.commands.join(', ') + "]");
+						this.errorEnd();
+						return false;
+					}
+
 					triggeredListeners.push(commandListener);
 				}
 				break;
@@ -653,11 +905,18 @@ export class ScriptedGame extends Game {
 		return result;
 	}
 
-	addBits(user: User | Player, bits: number, noPm?: boolean): boolean {
+	addBits(user: User | Player, bits: number, noPm?: boolean, achievementBits?: boolean): boolean {
+		if (this.isPm(this.room) || !Config.rankedGames || !Config.rankedGames.includes(this.room.id) ||
+			(this.parentGame && this.parentGame.allowChildGameBits !== true)) return false;
+
 		bits = Math.floor(bits);
-		if (bits <= 0 || this.isPm(this.room) || (this.parentGame && this.parentGame.allowChildGameBits !== true)) return false;
-		if (bits > this.maxBits) bits = this.maxBits;
-		if (this.shinyMascot) bits *= 2;
+		if (bits <= 0) return false;
+
+		if (!achievementBits) {
+			if (bits > this.maxBits) bits = this.maxBits;
+			if (this.shinyMascot) bits *= 2;
+		}
+
 		Storage.addPoints(this.room, Storage.gameLeaderboard, user.name, bits, this.format.id);
 		if (!noPm) {
 			user.say("You were awarded " + bits + " bits! To see your total amount, use the command ``" + Config.commandCharacter +
@@ -668,8 +927,11 @@ export class ScriptedGame extends Game {
 	}
 
 	removeBits(user: User | Player, bits: number, noPm?: boolean): boolean {
+		if (this.isPm(this.room) || !Config.rankedGames || !Config.rankedGames.includes(this.room.id) ||
+			(this.parentGame && this.parentGame.allowChildGameBits !== true)) return false;
+
 		bits = Math.floor(bits);
-		if (bits <= 0 || this.isPm(this.room) || (this.parentGame && this.parentGame.allowChildGameBits !== true)) return false;
+		if (bits <= 0) return false;
 		if (this.shinyMascot) bits *= 2;
 		Storage.removePoints(this.room, Storage.gameLeaderboard, user.name, bits, this.format.id);
 		if (!noPm) {
@@ -749,10 +1011,10 @@ export class ScriptedGame extends Game {
 
 			if (repeat) {
 				repeatUnlock.push(player);
-				this.addBits(player, achievement.repeatBits!);
+				this.addBits(player, achievement.repeatBits!, false, true);
 			} else {
 				firstUnlock.push(player);
-				this.addBits(player, achievement.bits);
+				this.addBits(player, achievement.bits, false, true);
 			}
 		}
 
@@ -775,6 +1037,7 @@ export class ScriptedGame extends Game {
 	getRandomAnswer?(): IRandomGameAnswer;
 	/** Return `false` to prevent a user from being added to the game (and send the reason to the user) */
 	onAddPlayer?(player: Player, lateJoin?: boolean): boolean | undefined;
+	onAddLateJoinQueuedPlayers?(players: Player[]): void;
 	onAddExistingPlayer?(player: Player): void;
 	onAfterDeallocate?(forceEnd: boolean): void;
 	onBattleExpire?(room: Room): void;
@@ -800,7 +1063,8 @@ export class ScriptedGame extends Game {
 	onRemovePlayer?(player: Player): void;
 	onSignups?(): void;
 	onStart?(): void;
-	onUserJoinRoom?(room: Room, user: User): void;
+	/** Return `false` to continue the game until another condition is met */
+	onTimeLimit?(): boolean;
 	parseChatMessage?(user: User, message: string): void;
 	rejectChallenge?(user: User): boolean;
 	repostInformation?(): void;

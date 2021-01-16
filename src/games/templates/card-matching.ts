@@ -9,6 +9,7 @@ import { Card, game as cardGame } from './card';
 
 interface IPreviouslyPlayedCard {
 	card: string;
+	player: string;
 	detail?: string;
 	shiny?: boolean;
 }
@@ -34,7 +35,7 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 	maxPlayers: number = 15;
 	playableCardDescription: string = "You must play a card that matches color or a type with the top card.";
 	previouslyPlayedCards: IPreviouslyPlayedCard[] = [];
-	previouslyPlayedCardsAmount: number = 4;
+	previouslyPlayedCardsAmount: number = 3;
 	roundDrawAmount: number = 0;
 	showPlayerCards: boolean = true;
 	timeLimit: number = 25 * 60 * 1000;
@@ -139,15 +140,13 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 	}
 
 	getPreviouslyPlayedCardsHtml(): string {
-		let html = '';
-		const lowestOpacity = 25;
-		const opacityIncrement = Math.floor((100 - lowestOpacity) / this.previouslyPlayedCardsAmount);
-		for (let i = 0; i < this.previouslyPlayedCards.length; i++) {
-			const card = this.previouslyPlayedCards[i];
-			const cardText = card.card + (card.detail ? ' (' + card.detail + ')' : '');
-			html += '<div class="infobox" style="width:' + (cardText.length * 8) + 'px;opacity:' + (lowestOpacity +
-				(opacityIncrement * i)) + '%;' + (card.shiny ? 'color: ' + Tools.hexColorCodes['Dark-Yellow']['background-color'] : '') +
-				'">' + cardText + '</div>';
+		if (!this.previouslyPlayedCards.length) return "";
+
+		let html = '<u>Previously played cards</u><br />';
+		for (const previouslyPlayedCard of this.previouslyPlayedCards) {
+			html += "<username>" + previouslyPlayedCard.player + "</username>'s " + previouslyPlayedCard.card +
+				(previouslyPlayedCard.shiny ? " \u2605" : "") +
+				(previouslyPlayedCard.detail ? " (" + previouslyPlayedCard.detail + ")" : "") + "<br />";
 		}
 		return html;
 	}
@@ -266,18 +265,19 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 		}
 		html += card.name + '<br />';
 
+		const whiteHex = Tools.getNamedHexCode('White');
+		const blackHex = Tools.getNamedHexCode('Black');
+
 		if (card.action) {
 			if (this.usesColors) {
-				html += '<div style="background-color:' + Tools.hexColorCodes['White']['background-color'] +
-					';background:' + Tools.hexColorCodes['White']['background'] + ';border: 1px solid #a99890;border-radius:3px;width:' +
-					this.detailLabelWidth + 'px;padding:1px;color:#333;text-shadow:1px 1px 1px #eee;text-transform: uppercase;' +
-					'text-align:center;font-size:8pt"><b>Action</b></div>';
+				html += '<div style="background-color:' + whiteHex.color + ';background:' + whiteHex.gradient + ';' +
+					'border: 1px solid #a99890;border-radius:3px;width:' + this.detailLabelWidth + 'px;padding:1px;color:#333;' +
+					'text-shadow:1px 1px 1px #eee;text-transform: uppercase;text-align:center;font-size:8pt"><b>Action</b></div>';
 			}
 
-			html += '<div style="background-color:' + Tools.hexColorCodes['Black']['background-color'] +
-				';background:' + Tools.hexColorCodes['Black']['background'] + ';border: 1px solid #a99890;border-radius:3px;width:auto;' +
-				'padding:1px;color:#fff;text-shadow:1px 1px 1px #333;text-transform: uppercase;' +
-				'text-align:center;font-size:8pt"><b>' + card.action.description + '</b></div>';
+			html += '<div style="background-color:' + blackHex.color + ';background:' + blackHex.gradient + ';' +
+				'border: 1px solid #a99890;border-radius:3px;width:auto;padding:1px;color:#fff;text-shadow:1px 1px 1px #333;' +
+				'text-transform: uppercase;text-align:center;font-size:8pt"><b>' + card.action.description + '</b></div>';
 		} else {
 			html += this.getCardPmDetails(card as IPokemonCard);
 		}
@@ -329,8 +329,8 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 			this.topCard = topCard as IPokemonCard;
 		}
 
+		this.storePreviouslyPlayedCard({card: this.topCard.name, player: Users.self.name});
 		this.nextRound();
-		this.storePreviouslyPlayedCard({card: Users.self.name + "'s " + this.topCard.name});
 	}
 
 	isPlayableCard(card: ICard, otherCard: ICard): boolean {
@@ -432,35 +432,6 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 		return false;
 	}
 
-	timeEnd(): void {
-		this.timeEnded = true;
-		this.say("Time is up!");
-		const winners = new Map<Player, number>();
-		let leastCards = Infinity;
-		for (const i in this.players) {
-			if (this.players[i].eliminated) continue;
-			const player = this.players[i];
-			const cards = this.playerCards.get(player);
-			if (!cards) throw new Error(player.name + " has no hand");
-			const len = cards.length;
-			if (len < leastCards) {
-				winners.clear();
-				winners.set(player, 1);
-				leastCards = len;
-			} else if (len === leastCards) {
-				winners.set(player, 1);
-			}
-		}
-
-		if (this.finitePlayerCards) {
-			winners.forEach((value, player) => {
-				player.frozen = true;
-			});
-		}
-
-		this.end();
-	}
-
 	autoPlay(player: Player, splitCards: ITurnCards): void {
 		const playerCards = this.playerCards.get(player)!;
 
@@ -495,11 +466,10 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 			this.currentPlayer = null;
 		}
 
-		if (Date.now() - this.startTime! > this.timeLimit) return this.timeEnd();
 		if (this.getRemainingPlayerCount() <= 1) {
 			if (this.finitePlayerCards) {
 				const finalPlayer = this.getFinalPlayer();
-				if (finalPlayer) finalPlayer.frozen = true;
+				if (finalPlayer) finalPlayer.metWinCondition = true;
 			}
 			this.end();
 			return;
@@ -565,9 +535,7 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 
 		if (this.timeEnded) return; // eslint-disable-line @typescript-eslint/no-unnecessary-condition
 
-		let useUhtmlAuto = this.round === currentRound;
 		if (autoDraws.size) {
-			if (useUhtmlAuto) useUhtmlAuto = false;
 			const names: string[] = [];
 			autoDraws.forEach((cards, autoDrawPlayer) => {
 				if (autoDrawPlayer.eliminated) return;
@@ -581,7 +549,7 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 		this.currentPlayer = player;
 		this.awaitingCurrentPlayerCard = true;
 
-		const html = this.getMascotAndNameHtml() + "<br /><center>" + this.getTopCardHtml() + "<br /><br /><b><username>" + player!.name +
+		const html = this.getMascotAndNameHtml() + "<br /><center>" + this.getTopCardHtml() + "<br /><b><username>" + player!.name +
 			"</username></b>'s turn!</center>";
 		const uhtmlName = this.uhtmlBaseName + '-round';
 		this.onUhtml(uhtmlName, html, () => {
@@ -614,11 +582,8 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 								// nextRound() called in onRemovePlayer
 								this.eliminatePlayer(player!, "You did not play a card for " + this.playerInactiveRoundLimit + " rounds!");
 
-								const remainingPlayers: Player[] = [];
-								for (const i in this.players) {
-									if (!this.players[i].eliminated) remainingPlayers.push(this.players[i]);
-								}
-								if (remainingPlayers.length === 1) remainingPlayers[0].frozen = true;
+								const newFinalPlayer = this.getFinalPlayer();
+								if (newFinalPlayer) newFinalPlayer.metWinCondition = true;
 
 								this.onRemovePlayer(player!);
 							} else {
@@ -634,7 +599,7 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 			}, this.turnWarningTime);
 		});
 
-		if (useUhtmlAuto) {
+		if (!skippedPlayerCount && this.round === currentRound) {
 			this.sayUhtmlAuto(uhtmlName, html);
 		} else {
 			this.sayUhtml(uhtmlName, html);
@@ -643,7 +608,7 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 
 	onEnd(): void {
 		for (const i in this.players) {
-			if (this.players[i].eliminated || (this.finitePlayerCards && !this.players[i].frozen)) continue;
+			if (this.players[i].eliminated || (this.finitePlayerCards && !this.players[i].metWinCondition)) continue;
 			const player = this.players[i];
 			this.addBits(player, 500);
 			this.winners.set(player, 1);
@@ -676,8 +641,6 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 	}
 
 	playCard(card: ICard, player: Player, targets: string[], cards: ICard[]): boolean {
-		card.displayName = player.name + "'s " + card.name;
-
 		let played = false;
 		if (card.action) {
 			played = this.playActionCard(card, player, targets, cards);
@@ -697,7 +660,7 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 		const playedCards: ICard[] = [card];
 		for (const target of targets) {
 			const id = Tools.toId(target);
-			const index = this.getCardIndex(id, cards);
+			const index = this.getCardIndex(id, cards, playedCards);
 			if (index < 0) {
 				const pokemon = Dex.getPokemon(id);
 				if (pokemon) {
@@ -738,7 +701,6 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 			}
 
 			card = playedCards[playedCards.length - 1] as IPokemonCard;
-			card.displayName = player.name + "'s " + card.name;
 			for (const playedCard of playedCards) {
 				if (playedCard !== card) names.push(playedCard.name);
 				cards.splice(cards.indexOf(playedCard), 1);
@@ -762,8 +724,8 @@ export abstract class CardMatching<ActionCardsType = Dict<IActionCardData>> exte
 
 		this.awaitingCurrentPlayerCard = false;
 
-		this.storePreviouslyPlayedCard({card: (card.displayName || card.name) + (names.length ? " ( + " + names.join(" + ") + ")" : ""),
-			shiny: card.shiny && !card.played});
+		this.storePreviouslyPlayedCard({card: card.name + (names.length ? " ( + " + names.join(" + ") + ")" : ""),
+			player: player.name, shiny: card.shiny && !card.played});
 		this.setTopCard(card, player);
 
 		if (!player.eliminated) {
@@ -820,6 +782,7 @@ const commands: GameCommandDefinitions<CardMatching> = {
 
 			if (!cards.length) {
 				player.frozen = true;
+				player.metWinCondition = true;
 				if (this.finitePlayerCards) {
 					this.sayUhtmlAuto(this.uhtmlBaseName + '-round', this.getMascotAndNameHtml() + "<br /><center><br />" +
 						this.getTopCardHtml() + "</center>");

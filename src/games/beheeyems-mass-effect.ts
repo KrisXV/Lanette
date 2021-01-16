@@ -69,8 +69,7 @@ class BeheeyemsMassEffect extends QuestionAndAnswer {
 		}
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		let effectiveness = this.sampleOne(effectivenessListsKeys);
 		while (effectiveness === this.lastEffectiveness) {
 			effectiveness = this.sampleOne(effectivenessListsKeys);
@@ -95,6 +94,11 @@ export const game: IGameFile<BeheeyemsMassEffect> = Games.copyTemplateProperties
 	minigameCommandAliases: ['meffect'],
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess a Pokemon whose type effectiveness matches the " +
 		"given parameters.",
-	modes: ['survival', 'team'],
+	modeProperties: {
+		'timeattack': {
+			roundTime: 10 * 1000,
+		},
+	},
+	modes: ['multianswer', 'survival', 'team', 'timeattack'],
 	nonTrivialLoadData: true,
 });

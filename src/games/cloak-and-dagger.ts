@@ -10,7 +10,6 @@ class CloakAndDagger extends EliminationTournament {
 	startingTeamsLength = 1;
 	baseTournamentName = name;
 	tournamentDescription = description;
-	canRejoin = true;
 	requiredTier = "OU";
 	usesCloakedPokemon = true;
 }
@@ -25,7 +24,7 @@ export const game: IGameFile<CloakAndDagger> = Games.copyTemplateProperties(elim
 			name: "Cloak and Dagger Ubers",
 			battleFormatId: "ubers",
 			requiredTier: "Uber",
-			variantAliases: ["ubers"],
+			variantAliases: ["ubers", "uber"],
 		},
 		{
 			name: "Cloak and Dagger UU",

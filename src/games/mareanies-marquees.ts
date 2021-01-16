@@ -31,8 +31,7 @@ class MareaniesMarquee extends QuestionAndAnswer {
 		data["Pokemon Moves"] = Games.getMovesList().map(x => x.name).filter(x => x.length > LETTERS_TO_REVEAL);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const category = (this.roundCategory || this.sampleOne(categories)) as DataKey;
 		this.currentCategory = category;
 		let answer = '';
@@ -46,7 +45,7 @@ class MareaniesMarquee extends QuestionAndAnswer {
 			for (let i = 0; i < letters.length; i++) {
 				let part = letters.slice(i, i + LETTERS_TO_REVEAL);
 				if (part.length < LETTERS_TO_REVEAL) part = part.concat(letters.slice(0, LETTERS_TO_REVEAL - part.length));
-				if (Client.willBeFiltered(part.join(''), !this.isPm(this.room) ? this.room : undefined)) {
+				if (Client.checkFilters(part.join(''), !this.isPm(this.room) ? this.room : undefined)) {
 					willBeFiltered = true;
 					break;
 				}

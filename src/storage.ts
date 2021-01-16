@@ -2,7 +2,10 @@ import fs = require('fs');
 import path = require('path');
 
 import type { Room } from './rooms';
-import type { IDatabase, IGlobalDatabase, Leaderboard, LeaderboardType } from './types/storage';
+import type {
+	ICachedLeaderboardEntry, IDatabase, IGlobalDatabase, ILeaderboard,
+	ILeaderboardEntry, IOfflineMessage, LeaderboardType
+} from './types/storage';
 import type { User } from './users';
 
 const MAX_QUEUED_OFFLINE_MESSAGES = 3;
@@ -10,30 +13,41 @@ const LAST_SEEN_EXPIRATION = 30 * 24 * 60 * 60 * 1000;
 const OFFLINE_MESSAGE_EXPIRATION = 30 * 24 * 60 * 60 * 1000;
 
 const globalDatabaseId = 'globalDB';
-const hostingDatabaseSuffix = '-hostingDB';
 const baseOfflineMessageLength = '[28 Jun 2019, 00:00:00 GMT-0500] **** said: '.length;
 
 export class Storage {
 	gameLeaderboard = 'gameLeaderboard' as const;
+	gameHostingLeaderboard = 'gameHostingLeaderbaord' as const;
 	tournamentLeaderboard = 'tournamentLeaderboard' as const;
 	unsortedLeaderboard = 'unsortedLeaderboard' as const;
 
-	databases: Dict<IDatabase> = {};
 	databasesDir: string = path.join(Tools.rootFolder, 'databases');
 	lastSeenExpirationDuration = Tools.toDurationString(LAST_SEEN_EXPIRATION);
+	leaderboardsAnnualPointsCache: Dict<PartialKeyedDict<LeaderboardType, ICachedLeaderboardEntry[]>> = {};
+	leaderboardsAnnualSourcePointsCache: Dict<PartialKeyedDict<LeaderboardType, Dict<ICachedLeaderboardEntry[]>>> = {};
+	leaderboardsCurrentPointsCache: Dict<PartialKeyedDict<LeaderboardType, ICachedLeaderboardEntry[]>> = {};
+	leaderboardsCurrentSourcePointsCache: Dict<PartialKeyedDict<LeaderboardType, Dict<ICachedLeaderboardEntry[]>>> = {};
 	loadedDatabases: boolean = false;
 	reloadInProgress: boolean = false;
 
 	allLeaderboardTypes: LeaderboardType[];
 	globalDatabaseExportInterval: NodeJS.Timer;
 
+	private databases: Dict<IDatabase> = {};
+
 	constructor() {
-		this.allLeaderboardTypes = [this.gameLeaderboard, this.tournamentLeaderboard, this.unsortedLeaderboard];
+		this.allLeaderboardTypes = [this.gameLeaderboard, this.gameHostingLeaderboard, this.tournamentLeaderboard,
+			this.unsortedLeaderboard];
 		this.globalDatabaseExportInterval = setInterval(() => this.exportDatabase(globalDatabaseId), 15 * 60 * 1000);
 	}
 
 	onReload(previous: Partial<Storage>): void {
+		// @ts-expect-error
 		if (previous.databases) Object.assign(this.databases, previous.databases);
+		for (const id in this.databases) {
+			this.updateLeaderboardCaches(id, this.databases[id]);
+		}
+
 		if (previous.loadedDatabases) this.loadedDatabases = !!previous.loadedDatabases;
 
 		if (previous.globalDatabaseExportInterval) clearInterval(previous.globalDatabaseExportInterval);
@@ -52,12 +66,6 @@ export class Storage {
 	getGlobalDatabase(): IGlobalDatabase {
 		if (!(globalDatabaseId in this.databases)) this.databases[globalDatabaseId] = {};
 		return this.databases[globalDatabaseId] as IGlobalDatabase;
-	}
-
-	getHostingDatabase(room: Room): IDatabase {
-		const id = room.id + hostingDatabaseSuffix;
-		if (!(id in this.databases)) this.databases[id] = {};
-		return this.databases[id];
 	}
 
 	exportDatabase(roomid: string): void {
@@ -86,7 +94,39 @@ export class Storage {
 			if (!fileName.endsWith('.json')) continue;
 			const id = fileName.substr(0, fileName.indexOf('.json'));
 			const file = fs.readFileSync(path.join(this.databasesDir, fileName)).toString();
-			this.databases[id] = JSON.parse(file) as IDatabase;
+			const database = JSON.parse(file) as IDatabase;
+
+			let hasLeaderboard = false;
+			// convert old leaderboards as needed
+			for (const type of this.allLeaderboardTypes) {
+				if (!database[type]) continue;
+				hasLeaderboard = true;
+
+				// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+				if (!database[type]!.entries) {
+					const oldLeaderboard = (database[type] as unknown) as Dict<ILeaderboardEntry>;
+					const sources: string[] = [];
+					for (const i in oldLeaderboard) {
+						const entry = oldLeaderboard[i];
+						for (const source in entry.sources) {
+							if (!sources.includes(source)) sources.push(source);
+						}
+						for (const source in entry.annualSources) {
+							if (!sources.includes(source)) sources.push(source);
+						}
+					}
+
+					database[type] = {
+						entries: oldLeaderboard,
+						sources,
+						type,
+					};
+				}
+			}
+
+			if (hasLeaderboard) this.updateLeaderboardCaches(id, database);
+
+			this.databases[id] = database;
 		}
 
 		const globalDatabase = this.getGlobalDatabase();
@@ -106,6 +146,13 @@ export class Storage {
 		}
 	}
 
+	renameRoom(room: Room, oldId: string): void {
+		if (oldId in this.databases) {
+			this.databases[room.id] = this.databases[oldId];
+			delete this.databases[oldId];
+		}
+	}
+
 	getDefaultLeaderboardType(database: IDatabase): LeaderboardType {
 		if (database.tournamentLeaderboard) return 'tournamentLeaderboard';
 		if (database.gameLeaderboard) return 'gameLeaderboard';
@@ -114,9 +161,10 @@ export class Storage {
 
 	clearLeaderboard(roomid: string, leaderboardTypes?: LeaderboardType[]): boolean {
 		if (!(roomid in this.databases)) return false;
+		if (!leaderboardTypes || !leaderboardTypes.length) leaderboardTypes = this.allLeaderboardTypes;
+
 		this.archiveDatabase(roomid);
 
-		if (!leaderboardTypes || !leaderboardTypes.length) leaderboardTypes = this.allLeaderboardTypes;
 		const database = this.databases[roomid];
 		const date = new Date();
 		const month = date.getMonth() + 1;
@@ -124,8 +172,8 @@ export class Storage {
 		const clearAnnual = (month === 12 && day === 31) || (month === 1 && day === 1);
 		for (const leaderboardType of leaderboardTypes) {
 			if (!database[leaderboardType]) continue;
-			for (const i in database[leaderboardType]) {
-				const user = database[leaderboardType]![i];
+			for (const i in database[leaderboardType]!.entries) {
+				const user = database[leaderboardType]!.entries[i];
 				if (clearAnnual) {
 					user.annual = 0;
 				} else {
@@ -148,23 +196,56 @@ export class Storage {
 			}
 		}
 
-		if (this.databases[roomid].userHostedGameStats) {
-			this.databases[roomid].previousUserHostedGameStats = this.databases[roomid].userHostedGameStats;
-		}
+		if (database.scriptedGameCounts) database.scriptedGameCounts = {};
+		if (database.userHostedGameCounts) database.userHostedGameCounts = {};
+		if (database.userHostedGameStats) database.previousUserHostedGameStats = database.userHostedGameStats;
 
-		if (roomid + hostingDatabaseSuffix in this.databases) this.clearLeaderboard(roomid + hostingDatabaseSuffix);
-
+		this.updateLeaderboardCaches(roomid, database);
 		this.exportDatabase(roomid);
 		return true;
 	}
 
-	createLeaderboardEntry(leaderboard: Leaderboard, name: string, id: string): void {
-		leaderboard[id] = {
+	createLeaderboardEntry(leaderboard: ILeaderboard, name: string, id: string): void {
+		if (id in leaderboard.entries) return;
+
+		leaderboard.entries[id] = {
 			annual: 0,
 			annualSources: {},
 			current: 0,
 			name,
 			sources: {},
+		};
+	}
+
+	createGameTrainerCard(database: IDatabase, name: string): void {
+		const id = Tools.toId(name);
+		if (!database.gameTrainerCards) database.gameTrainerCards = {};
+		if (id in database.gameTrainerCards) return;
+
+		database.gameTrainerCards[id] = {
+			avatar: '',
+			pokemon: [],
+		};
+	}
+
+	createGameHostBox(database: IDatabase, name: string): void {
+		const id = Tools.toId(name);
+		if (!database.gameHostBoxes) database.gameHostBoxes = {};
+		if (id in database.gameHostBoxes) return;
+
+		database.gameHostBoxes[id] = {
+			pokemon: [],
+			shinyPokemon: [],
+		};
+	}
+
+	createGameScriptedBox(database: IDatabase, name: string): void {
+		const id = Tools.toId(name);
+		if (!database.gameScriptedBoxes) database.gameScriptedBoxes = {};
+		if (id in database.gameScriptedBoxes) return;
+
+		database.gameScriptedBoxes[id] = {
+			pokemon: [],
 		};
 	}
 
@@ -178,25 +259,187 @@ export class Storage {
 		if (!source) return;
 
 		const database = this.getDatabase(room);
-		if (!database[leaderboardType]) database[leaderboardType] = {};
+		if (!database[leaderboardType]) {
+			database[leaderboardType] = {
+				entries: {},
+				sources: [],
+				type: leaderboardType,
+			};
+		}
 		const leaderboard = database[leaderboardType]!;
 
-		if (!(id in leaderboard)) {
+		if (!(id in leaderboard.entries)) {
 			this.createLeaderboardEntry(leaderboard, name, id);
 		} else {
-			leaderboard[id].name = name;
+			leaderboard.entries[id].name = name;
 		}
 
-		leaderboard[id].current = Math.max(0, leaderboard[id].current + amount);
+		leaderboard.entries[id].current = Math.max(0, leaderboard.entries[id].current + amount);
 
-		if (!(source in leaderboard[id].sources)) leaderboard[id].sources[source] = 0;
-		leaderboard[id].sources[source] += amount;
-		if (leaderboard[id].sources[source] <= 0) delete leaderboard[id].sources[source];
+		if (!(source in leaderboard.entries[id].sources)) leaderboard.entries[id].sources[source] = 0;
+		leaderboard.entries[id].sources[source] += amount;
+		if (leaderboard.entries[id].sources[source] <= 0) delete leaderboard.entries[id].sources[source];
+
+		this.updateLeaderboardPointsCaches(room.id, leaderboard);
+		this.updateLeaderboardSourcePointsCaches(room.id, leaderboard, source);
 	}
 
 	removePoints(room: Room, leaderboardType: LeaderboardType, name: string, amount: number, source: string): void {
 		if (amount < 0) throw new Error("Storage.removePoints() called with a negative amount");
 		this.addPoints(room, leaderboardType, name, amount * -1, source);
+	}
+
+	getPoints(room: Room, leaderboardType: LeaderboardType, name: string): number {
+		const database = this.getDatabase(room);
+		const id = Tools.toId(name);
+		if (!database[leaderboardType] || !(id in database[leaderboardType]!.entries)) return 0;
+		return database[leaderboardType]!.entries[id].current;
+	}
+
+	getAnnualPoints(room: Room, leaderboardType: LeaderboardType, name: string): number {
+		const database = this.getDatabase(room);
+		const id = Tools.toId(name);
+		if (!database[leaderboardType] || !(id in database[leaderboardType]!.entries)) return 0;
+		return database[leaderboardType]!.entries[id].annual + database[leaderboardType]!.entries[id].current;
+	}
+
+	updateLeaderboardCaches(roomid: string, database: IDatabase): void {
+		for (const type of this.allLeaderboardTypes) {
+			if (!database[type]) continue;
+			this.updateLeaderboardPointsCaches(roomid, database[type]!);
+			for (const source of database[type]!.sources) {
+				this.updateLeaderboardSourcePointsCaches(roomid, database[type]!, source);
+			}
+		}
+	}
+
+	updateLeaderboardPointsCaches(roomid: string, leaderboard: ILeaderboard): void {
+		const users = Object.keys(leaderboard.entries);
+
+		const annualPointsCache: Dict<number> = {};
+		const currentPointsCache: Dict<number> = {};
+
+		for (const id of users) {
+			annualPointsCache[id] = leaderboard.entries[id].annual + leaderboard.entries[id].current;
+			currentPointsCache[id] = leaderboard.entries[id].current;
+		}
+
+		if (!(roomid in this.leaderboardsAnnualPointsCache)) {
+			this.leaderboardsAnnualPointsCache[roomid] = {};
+		}
+
+		if (!(roomid in this.leaderboardsCurrentPointsCache)) {
+			this.leaderboardsCurrentPointsCache[roomid] = {};
+		}
+
+		this.leaderboardsAnnualPointsCache[roomid][leaderboard.type] = users.filter(x => annualPointsCache[x] !== 0)
+			.sort((a, b) => {
+				if (annualPointsCache[b] === annualPointsCache[a]) {
+					if (b > a) return -1;
+					return 1;
+				}
+				return annualPointsCache[b] - annualPointsCache[a];
+			}).map(x => {
+				return {
+					id: x,
+					points: annualPointsCache[x],
+				};
+			});
+		this.leaderboardsCurrentPointsCache[roomid][leaderboard.type] = users.filter(x => currentPointsCache[x] !== 0)
+			.sort((a, b) => {
+				if (currentPointsCache[b] === currentPointsCache[a]) {
+					if (b > a) return -1;
+					return 1;
+				}
+				return currentPointsCache[b] - currentPointsCache[a];
+			}).map(x => {
+				return {
+					id: x,
+					points: currentPointsCache[x],
+				};
+			});
+	}
+
+	updateLeaderboardSourcePointsCaches(roomid: string, leaderboard: ILeaderboard, source: string): void {
+		const users = Object.keys(leaderboard.entries);
+
+		const annualSourcePointsCache: Dict<number> = {};
+		const currentSourcePointsCache: Dict<number> = {};
+
+		for (const id of users) {
+			let annualSourcePoints = 0;
+			if (leaderboard.entries[id].sources[source]) annualSourcePoints += leaderboard.entries[id].sources[source];
+			if (leaderboard.entries[id].annualSources[source]) {
+				annualSourcePoints += leaderboard.entries[id].annualSources[source];
+			}
+			annualSourcePointsCache[id] = annualSourcePoints;
+			currentSourcePointsCache[id] = leaderboard.entries[id].sources[source] || 0;
+		}
+
+		if (!(roomid in this.leaderboardsAnnualSourcePointsCache)) {
+			this.leaderboardsAnnualSourcePointsCache[roomid] = {};
+		}
+		if (!this.leaderboardsAnnualSourcePointsCache[roomid][leaderboard.type]) {
+			this.leaderboardsAnnualSourcePointsCache[roomid][leaderboard.type] = {};
+		}
+
+		if (!(roomid in this.leaderboardsCurrentSourcePointsCache)) {
+			this.leaderboardsCurrentSourcePointsCache[roomid] = {};
+		}
+		if (!this.leaderboardsCurrentSourcePointsCache[roomid][leaderboard.type]) {
+			this.leaderboardsCurrentSourcePointsCache[roomid][leaderboard.type] = {};
+		}
+
+		this.leaderboardsAnnualSourcePointsCache[roomid][leaderboard.type]![source] = users.filter(x => annualSourcePointsCache[x] !== 0)
+			.sort((a, b) => {
+				if (annualSourcePointsCache[b] === annualSourcePointsCache[a]) {
+					if (b > a) return -1;
+					return 1;
+				}
+				return annualSourcePointsCache[b] - annualSourcePointsCache[a];
+			}).map(x => {
+				return {
+					id: x,
+					points: annualSourcePointsCache[x],
+				};
+			});
+		this.leaderboardsCurrentSourcePointsCache[roomid][leaderboard.type]![source] = users.filter(x => currentSourcePointsCache[x] !== 0)
+			.sort((a, b) => {
+				if (currentSourcePointsCache[b] === currentSourcePointsCache[a]) {
+					if (b > a) return -1;
+					return 1;
+				}
+				return currentSourcePointsCache[b] - currentSourcePointsCache[a];
+			}).map(x => {
+				return {
+					id: x,
+					points: currentSourcePointsCache[x],
+				};
+			});
+	}
+
+	getAnnualPointsCache(room: Room, leaderboardType: LeaderboardType): ICachedLeaderboardEntry[] | undefined {
+		if (!(room.id in this.leaderboardsAnnualPointsCache) || !this.leaderboardsAnnualPointsCache[room.id][leaderboardType]) return;
+		return this.leaderboardsAnnualPointsCache[room.id][leaderboardType];
+	}
+
+	getAnnualSourcePointsCache(room: Room, leaderboardType: LeaderboardType, source: string): ICachedLeaderboardEntry[] | undefined {
+		if (!(room.id in this.leaderboardsAnnualSourcePointsCache) ||
+			!this.leaderboardsAnnualSourcePointsCache[room.id][leaderboardType] ||
+			!(source in this.leaderboardsAnnualSourcePointsCache[room.id][leaderboardType]!)) return;
+		return this.leaderboardsAnnualSourcePointsCache[room.id][leaderboardType]![source];
+	}
+
+	getCurrentPointsCache(room: Room, leaderboardType: LeaderboardType): ICachedLeaderboardEntry[] | undefined {
+		if (!(room.id in this.leaderboardsCurrentPointsCache) || !this.leaderboardsCurrentPointsCache[room.id][leaderboardType]) return;
+		return this.leaderboardsCurrentPointsCache[room.id][leaderboardType];
+	}
+
+	getCurrentSourcePointsCache(room: Room, leaderboardType: LeaderboardType, source: string): ICachedLeaderboardEntry[] | undefined {
+		if (!(room.id in this.leaderboardsCurrentSourcePointsCache) ||
+			!this.leaderboardsCurrentSourcePointsCache[room.id][leaderboardType] ||
+			!(source in this.leaderboardsCurrentSourcePointsCache[room.id][leaderboardType]!)) return;
+		return this.leaderboardsCurrentSourcePointsCache[room.id][leaderboardType]![source];
 	}
 
 	transferData(roomid: string, sourceName: string, destinationName: string): boolean {
@@ -207,36 +450,39 @@ export class Storage {
 		if (!sourceId || !destinationId || sourceId === destinationId) return false;
 
 		const database = this.databases[roomid];
+		let updatedLeaderboard = false;
+
 		for (const leaderboardType of this.allLeaderboardTypes) {
-			if (!database[leaderboardType] || !(sourceId in database[leaderboardType]!)) continue;
+			if (!database[leaderboardType] || !(sourceId in database[leaderboardType]!.entries)) continue;
+			updatedLeaderboard = true;
 
-			const leaderboad = database[leaderboardType]!;
-			if (!(destinationId in leaderboad)) {
-				this.createLeaderboardEntry(leaderboad, destinationName, destinationId);
+			const leaderboard = database[leaderboardType]!;
+			if (!(destinationId in leaderboard.entries)) {
+				this.createLeaderboardEntry(leaderboard, destinationName, destinationId);
 			}
 
-			for (const source in leaderboad[sourceId].sources) {
-				if (source in leaderboad[destinationId].sources) {
-					leaderboad[destinationId].sources[source] += leaderboad[sourceId].sources[source];
+			for (const source in leaderboard.entries[sourceId].sources) {
+				if (source in leaderboard.entries[destinationId].sources) {
+					leaderboard.entries[destinationId].sources[source] += leaderboard.entries[sourceId].sources[source];
 				} else {
-					leaderboad[destinationId].sources[source] = leaderboad[sourceId].sources[source];
+					leaderboard.entries[destinationId].sources[source] = leaderboard.entries[sourceId].sources[source];
 				}
-				delete leaderboad[sourceId].sources[source];
+				delete leaderboard.entries[sourceId].sources[source];
 			}
 
-			for (const source in leaderboad[sourceId].annualSources) {
-				if (source in leaderboad[destinationId].annualSources) {
-					leaderboad[destinationId].annualSources[source] += leaderboad[sourceId].annualSources[source];
+			for (const source in leaderboard.entries[sourceId].annualSources) {
+				if (source in leaderboard.entries[destinationId].annualSources) {
+					leaderboard.entries[destinationId].annualSources[source] += leaderboard.entries[sourceId].annualSources[source];
 				} else {
-					leaderboad[destinationId].annualSources[source] = leaderboad[sourceId].annualSources[source];
+					leaderboard.entries[destinationId].annualSources[source] = leaderboard.entries[sourceId].annualSources[source];
 				}
-				delete leaderboad[sourceId].annualSources[source];
+				delete leaderboard.entries[sourceId].annualSources[source];
 			}
 
-			leaderboad[destinationId].current += leaderboad[sourceId].current;
-			leaderboad[sourceId].current = 0;
-			leaderboad[destinationId].annual += leaderboad[sourceId].annual;
-			leaderboad[sourceId].annual = 0;
+			leaderboard.entries[destinationId].current += leaderboard.entries[sourceId].current;
+			leaderboard.entries[sourceId].current = 0;
+			leaderboard.entries[destinationId].annual += leaderboard.entries[sourceId].annual;
+			leaderboard.entries[sourceId].annual = 0;
 		}
 
 		if (database.gameAchievements && sourceId in database.gameAchievements) {
@@ -248,10 +494,7 @@ export class Storage {
 			}
 		}
 
-		if (roomid + hostingDatabaseSuffix in this.databases) {
-			this.transferData(roomid + hostingDatabaseSuffix, sourceName, destinationName);
-		}
-
+		if (updatedLeaderboard) this.updateLeaderboardCaches(roomid, database);
 		return true;
 	}
 
@@ -287,6 +530,7 @@ export class Storage {
 		if (!database.offlineMessages || !(user.id in database.offlineMessages)) return false;
 		const now = Date.now();
 		const expiredTime = now - OFFLINE_MESSAGE_EXPIRATION;
+		const filteredMessages: IOfflineMessage[] = [];
 		let hasExpiredMessages = false;
 		for (const message of database.offlineMessages[user.id]) {
 			if (message.readTime) {
@@ -302,8 +546,18 @@ export class Storage {
 			dateString = dateString.substr(0, dateString.indexOf(':') - 3);
 			let timeString = date.toTimeString();
 			timeString = timeString.substr(0, timeString.indexOf('('));
-			user.say("[" + dateString.trim() + ", " + timeString.trim() + "] " + "**" + message.sender + "** said: " + message.message);
-			message.readTime = now;
+			const formattedMessage = "[" + dateString.trim() + ", " + timeString.trim() + "] " + "**" + message.sender + "** said: " +
+				message.message;
+			if (Client.checkFilters(formattedMessage)) {
+				filteredMessages.push(message);
+			} else {
+				user.say(formattedMessage);
+				message.readTime = now;
+			}
+		}
+
+		for (const filteredMessage of filteredMessages) {
+			database.offlineMessages[user.id].splice(database.offlineMessages[user.id].indexOf(filteredMessage), 1);
 		}
 
 		if (hasExpiredMessages) database.offlineMessages[user.id] = database.offlineMessages[user.id].filter(x => !x.expired);

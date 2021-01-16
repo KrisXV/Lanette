@@ -9,6 +9,8 @@ const data: {stones: string[]} = {
 };
 
 class GolemsGalvanicMine extends ScriptedGame {
+	canMine: boolean = false;
+	inactiveRoundLimit: number = 5;
 	points = new Map<Player, number>();
 	roundMines = new Map<Player, number>();
 	roundStones: Dict<number> = {};
@@ -24,8 +26,38 @@ class GolemsGalvanicMine extends ScriptedGame {
 	}
 
 	onNextRound(): void {
+		this.canMine = false;
+		if (this.round > 1) {
+			if (this.roundMines.size) {
+				if (this.inactiveRounds) this.inactiveRounds = 0;
+
+				let reachedMaxPoints: boolean | undefined;
+				this.roundMines.forEach((value, player) => {
+					let points = this.points.get(player) || 0;
+					points += value;
+					if (points >= this.format.options.points) {
+						if (!reachedMaxPoints) reachedMaxPoints = true;
+						this.winners.set(player, points);
+					}
+					this.points.set(player, points);
+				});
+
+				if (reachedMaxPoints) {
+					this.end();
+					return;
+				}
+			} else {
+				this.inactiveRounds++;
+				if (this.inactiveRounds === this.inactiveRoundLimit) {
+					this.inactivityEnd();
+					return;
+				}
+			}
+		}
+
 		this.roundStones = {};
 		this.roundMines.clear();
+
 		const html = this.getRoundHtml(players => this.getPlayerPoints(players));
 		const uhtmlName = this.uhtmlBaseName + '-round-html';
 		this.onUhtml(uhtmlName, html, () => {
@@ -52,28 +84,10 @@ class GolemsGalvanicMine extends ScriptedGame {
 		html += "</tr></table></center>";
 		const uhtmlName = this.uhtmlBaseName + '-stones';
 		this.onUhtml(uhtmlName, html, () => {
-			this.timeout = setTimeout(() => this.tallyPoints(), this.roundTime);
+			this.canMine = true;
+			this.timeout = setTimeout(() => this.nextRound(), this.roundTime);
 		});
 		this.sayUhtml(uhtmlName, html);
-	}
-
-	tallyPoints(): void {
-		let reachedMaxPoints: boolean | undefined;
-		this.roundMines.forEach((value, player) => {
-			let points = this.points.get(player) || 0;
-			points += value;
-			if (points >= this.format.options.points) {
-				if (!reachedMaxPoints) reachedMaxPoints = true;
-				this.winners.set(player, points);
-			}
-			this.points.set(player, points);
-		});
-
-		if (reachedMaxPoints) {
-			this.end();
-		} else {
-			this.nextRound();
-		}
 	}
 
 	onEnd(): void {
@@ -86,6 +100,7 @@ const commands: GameCommandDefinitions<GolemsGalvanicMine> = {
 	mine: {
 		// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 		command(target, room, user) {
+			if (!this.canMine) return false;
 			const player = this.createPlayer(user) || this.players[user.id];
 			if (this.roundMines.has(player)) return false;
 			const stone = Dex.getDex(mod).getItem(target);

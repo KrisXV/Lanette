@@ -23,7 +23,7 @@ interface ITeamChange {
 }
 
 const SIGNUPS_HTML_DELAY = 2 * 1000;
-const UPDATE_HTML_PAGE_DELAY = 2 * 1000;
+const UPDATE_HTML_PAGE_DELAY = 5 * 1000;
 const CHECK_CHALLENGES_INACTIVE_DELAY = 30 * 1000;
 const ADVERTISEMENT_TIME = 20 * 60 * 1000;
 const POTENTIAL_MAX_PLAYERS: number[] = [12, 16, 24, 32, 48, 64];
@@ -43,7 +43,7 @@ export abstract class EliminationTournament extends ScriptedGame {
 	availableMatchNodes: EliminationNode<Player>[] = [];
 	banlist: string[] = [];
 	battleFormatId: string = 'ou';
-	readonly battleData: Dict<IBattleGameData> = {};
+	readonly battleData = new Map<Room, IBattleGameData>();
 	readonly battleRooms: string[] = [];
 	bracketHtml: string = '';
 	canRejoin: boolean = false;
@@ -69,7 +69,7 @@ export abstract class EliminationTournament extends ScriptedGame {
 	monoType: boolean = false;
 	playerCap: number = 0;
 	playerOpponents = new Map<Player, Player>();
-	playerRequiredPokemon = new Map<Player, readonly string[]>();
+	playerRequiredPokemon = new Map<Player, readonly string[][]>();
 	pokedex: string[] = [];
 	possibleTeams = new Map<Player, readonly string[][]>();
 	requiredAddition: boolean = false;
@@ -554,7 +554,7 @@ export abstract class EliminationTournament extends ScriptedGame {
 		return winnerTeamChanges;
 	}
 
-	updateMatches(): void {
+	updateMatches(onStart?: boolean): void {
 		const nodes = this.getAvailableMatchNodes();
 		for (const node of nodes) {
 			if (this.availableMatchNodes.includes(node)) continue;
@@ -565,9 +565,11 @@ export abstract class EliminationTournament extends ScriptedGame {
 			this.playerOpponents.set(player, opponent);
 			this.playerOpponents.set(opponent, player);
 
-			const notificationTitle = "New " + this.name + " opponent!";
-			player.sendHighlightPage(notificationTitle);
-			opponent.sendHighlightPage(notificationTitle);
+			if (!onStart) {
+				const notificationTitle = "New " + this.name + " opponent!";
+				player.sendHighlightPage(notificationTitle);
+				opponent.sendHighlightPage(notificationTitle);
+			}
 
 			let activityWarning = this.activityWarnTimeout;
 			if (!this.givenFirstRoundExtraTime.has(player) && !this.givenFirstRoundExtraTime.has(opponent)) {
@@ -593,9 +595,9 @@ export abstract class EliminationTournament extends ScriptedGame {
 					} else {
 						this.checkChallenges(node, player, opponent);
 					}
-				}, this.activityDQTimeout);
+				}, this.activityDQTimeout + UPDATE_HTML_PAGE_DELAY);
 				this.activityTimers.set(node, dqTimeout);
-			}, activityWarning);
+			}, activityWarning + UPDATE_HTML_PAGE_DELAY);
 			this.activityTimers.set(node, warningTimeout);
 		}
 
@@ -885,10 +887,12 @@ export abstract class EliminationTournament extends ScriptedGame {
 		const team = this.getStartingTeam().filter(x => !!x);
 		if (team.length < this.startingTeamsLength) throw new Error("Out of Pokemon to give (" + player.name + ")");
 
+		const formeCombinations = Dex.getFormeCombinations(team, this.battleFormat.usablePokemon);
+
 		if (this.usesCloakedPokemon) {
-			this.playerRequiredPokemon.set(player, team);
+			this.playerRequiredPokemon.set(player, formeCombinations);
 		} else {
-			this.possibleTeams.set(player, Dex.getFormeCombinations(team, this.battleFormat.usablePokemon));
+			this.possibleTeams.set(player, formeCombinations);
 		}
 
 		this.starterPokemon.set(player, team);
@@ -916,6 +920,7 @@ export abstract class EliminationTournament extends ScriptedGame {
 			html += "(the tournament has started)";
 		} else {
 			html += Client.getPmSelfButton(Config.commandCharacter + "joingame " + this.room.title, "Join tournament") +
+				Client.getPmSelfButton(Config.commandCharacter + "leavegame " + this.room.title, "Leave tournament") +
 				" (" + (this.playerCap - this.playerCount) + "/" + this.playerCap + " slots remaining)";
 		}
 		html += "</div>";
@@ -1011,7 +1016,7 @@ export abstract class EliminationTournament extends ScriptedGame {
 
 		this.startAdvertisements();
 		this.sayCommand("/notifyrank all, " + this.room.title + " " + Users.self.name + " tournament," + this.name + "," + Users.self.name +
-			" is hosting a tournament");
+			" is hosting a tournament", true);
 	}
 
 	startAdvertisements(): void {
@@ -1109,7 +1114,7 @@ export abstract class EliminationTournament extends ScriptedGame {
 			}
 		});
 
-		this.updateMatches();
+		this.updateMatches(true);
 	}
 
 	onAddPlayer(player: Player): boolean {
@@ -1234,21 +1239,22 @@ export abstract class EliminationTournament extends ScriptedGame {
 	}
 
 	onUserJoinRoom(room: Room, user: User): void {
-		if (user === Users.self) {
-			this.checkedBattleRooms.push(room.id);
-		}
+		if (this.allowsScouting || !(user.id in this.players) || this.players[user.id].eliminated) return;
 
-		if (this.allowsScouting || !(user.id in this.players) || this.players[user.id].eliminated || !(room.id in this.battleData)) return;
-		if (this.battleData[room.id].slots.size === 2 && !this.battleData[room.id].slots.has(this.players[user.id])) {
+		const battleData = this.battleData.get(room);
+		if (!battleData) return;
+
+		if (battleData.slots.size === 2 && !battleData.slots.has(this.players[user.id])) {
 			this.players[user.id].say("You have been disqualified for scouting another " + this.name + " battle.");
 			this.removePlayer(user, true);
 		}
 	}
 
 	getPlayersFromBattleData(room: Room): [Player, Player] | null {
-		if (!(room.id in this.battleData) || this.battleData[room.id].slots.size < 2) return null;
+		const battleData = this.battleData.get(room);
+		if (!battleData || battleData.slots.size < 2) return null;
 
-		const players = this.battleData[room.id].slots.keys();
+		const players = battleData.slots.keys();
 		const p1 = players.next().value as Player;
 		const p2 = players.next().value as Player;
 		if (this.playerOpponents.get(p1) !== p2) return null;
@@ -1260,11 +1266,13 @@ export abstract class EliminationTournament extends ScriptedGame {
 		const id = Tools.toId(username);
 		if (!id) return;
 
+		let battleData = this.battleData.get(room);
+
 		// non-tournament battle, a player left the battle, or /addplayer was used
-		if (!(id in this.players) || (room.id in this.battleData && this.getPlayersFromBattleData(room))) {
-			if (room.id in this.battleData) {
+		if (!(id in this.players) || (battleData && this.getPlayersFromBattleData(room))) {
+			if (battleData) {
 				let originalPlayer: Player | undefined;
-				this.battleData[room.id].slots.forEach((storedSlot, player) => {
+				battleData.slots.forEach((storedSlot, player) => {
 					if (storedSlot === slot) originalPlayer = player;
 				});
 
@@ -1277,21 +1285,13 @@ export abstract class EliminationTournament extends ScriptedGame {
 			return;
 		}
 
-		if (!(room.id in this.battleData)) {
-			this.battleData[room.id] = {
-				remainingPokemon: {},
-				slots: new Map<Player, string>(),
-				pokemonCounts: {},
-				pokemon: {},
-				pokemonLeft: {},
-				nicknames: {},
-				wrongTeam: new Map<Player, boolean>(),
-				faintedCloakedPokemon: {},
-			};
+		if (!battleData) {
+			battleData = this.generateBattleData();
+			this.battleData.set(room, battleData);
 		}
 
 		const player = this.players[id];
-		this.battleData[room.id].slots.set(player, slot);
+		battleData.slots.set(player, slot);
 
 		const players = this.getPlayersFromBattleData(room);
 		if (players) {
@@ -1302,15 +1302,16 @@ export abstract class EliminationTournament extends ScriptedGame {
 	}
 
 	onBattlePokemon(room: Room, slot: string, details: string): boolean {
-		if (!(room.id in this.battleData)) return false;
+		const battleData = this.battleData.get(room);
+		if (!battleData) return false;
 
-		if (!(slot in this.battleData[room.id].remainingPokemon)) this.battleData[room.id].remainingPokemon[slot] = 0;
-		this.battleData[room.id].remainingPokemon[slot]++;
+		if (!(slot in battleData.remainingPokemon)) battleData.remainingPokemon[slot] = 0;
+		battleData.remainingPokemon[slot]++;
 		const pokemon = Dex.getPokemon(details.split(',')[0]);
 		if (!pokemon) return false;
 
-		if (!(slot in this.battleData[room.id].pokemon)) this.battleData[room.id].pokemon[slot] = [];
-		this.battleData[room.id].pokemon[slot].push(pokemon.name);
+		if (!(slot in battleData.pokemon)) battleData.pokemon[slot] = [];
+		battleData.pokemon[slot].push(pokemon.name);
 		return true;
 	}
 
@@ -1322,17 +1323,18 @@ export abstract class EliminationTournament extends ScriptedGame {
 		let loser: Player | undefined;
 		let winnerIllegalTeam = false;
 		if (this.validateTeams) {
-			this.battleData[room.id].slots.forEach((slot, player) => {
-				if (!(slot in this.battleData[room.id].pokemon)) {
+			const battleData = this.battleData.get(room)!;
+			battleData.slots.forEach((slot, player) => {
+				if (!(slot in battleData.pokemon)) {
 					throw new Error(player.name + " (" + slot + ") does not have a team in " + room.id);
 				}
 
-				const team = this.battleData[room.id].pokemon[slot];
+				const team = battleData.pokemon[slot];
 
 				let illegalTeam = false;
 				const requiredPokemon = this.playerRequiredPokemon.get(player);
 				if (requiredPokemon) {
-					illegalTeam = !Dex.includesPokemon(team, requiredPokemon);
+					illegalTeam = !Dex.includesPokemonFormes(team, requiredPokemon);
 				} else {
 					const possibleTeams = this.possibleTeams.get(player);
 					if (!possibleTeams) throw new Error(player.name + " (" + slot + ") does not have possible teams");
@@ -1352,7 +1354,7 @@ export abstract class EliminationTournament extends ScriptedGame {
 			});
 		}
 
-		if (!this.battleRooms.includes(room.id)) this.battleRooms.push(room.id);
+		if (!this.battleRooms.includes(room.publicId)) this.battleRooms.push(room.publicId);
 
 		if (winner && loser) {
 			loser.say("You used an illegal team and have been disqualified.");
@@ -1372,7 +1374,7 @@ export abstract class EliminationTournament extends ScriptedGame {
 		const players = this.getPlayersFromBattleData(room);
 		if (!players) return false;
 
-		if (!this.battleRooms.includes(room.id)) this.battleRooms.push(room.id);
+		if (!this.battleRooms.includes(room.publicId)) this.battleRooms.push(room.publicId);
 
 		if (!room.inviteOnlyBattle && this.getRemainingPlayerCount() === 2) {
 			this.say("**Final battle of the " + this.name + " tournament:** <<" + room.id + ">>");
@@ -1382,12 +1384,14 @@ export abstract class EliminationTournament extends ScriptedGame {
 	}
 
 	onBattleSwitch(room: Room, pokemon: string, details: string): boolean {
-		if (!(room.id in this.battleData)) return false;
+		const battleData = this.battleData.get(room);
+		if (!battleData) return false;
+
 		const slot = pokemon.substr(0, 2);
 		const name = pokemon.substr(5).trim();
 		if (!Dex.getPokemon(name)) {
-			if (!(slot in this.battleData[room.id].nicknames)) this.battleData[room.id].nicknames[slot] = {};
-			this.battleData[room.id].nicknames[slot][name] = details.split(',')[0];
+			if (!(slot in battleData.nicknames)) battleData.nicknames[slot] = {};
+			battleData.nicknames[slot][name] = details.split(',')[0];
 		}
 
 		return true;
@@ -1399,17 +1403,19 @@ export abstract class EliminationTournament extends ScriptedGame {
 
 		if (!this.usesCloakedPokemon) return true;
 
+		const battleData = this.battleData.get(room)!;
 		const slot = pokemonArgument.substr(0, 2);
 		const name = pokemonArgument.substr(5);
 		let pokemon = Dex.getPokemon(name);
-		if (!pokemon && slot in this.battleData[room.id].nicknames && name in this.battleData[room.id].nicknames[slot]) {
-			pokemon = Dex.getPokemon(this.battleData[room.id].nicknames[slot][name]);
+
+		if (!pokemon && slot in battleData.nicknames && name in battleData.nicknames[slot]) {
+			pokemon = Dex.getPokemon(battleData.nicknames[slot][name]);
 		}
 
 		if (pokemon) {
 			let player: Player;
 			let opponent: Player;
-			if (this.battleData[room.id].slots.get(players[0]) === slot) {
+			if (battleData.slots.get(players[0]) === slot) {
 				player = players[0];
 				opponent = players[1];
 			} else {
@@ -1419,9 +1425,9 @@ export abstract class EliminationTournament extends ScriptedGame {
 
 			const cloakedPokemon = this.starterPokemon.get(player)!;
 			if (cloakedPokemon.includes(pokemon.name)) {
-				if (!(slot in this.battleData[room.id].faintedCloakedPokemon)) this.battleData[room.id].faintedCloakedPokemon[slot] = 0;
-				this.battleData[room.id].faintedCloakedPokemon[slot]++;
-				if (this.battleData[room.id].faintedCloakedPokemon[slot] === cloakedPokemon.length) {
+				if (!(slot in battleData.faintedCloakedPokemon)) battleData.faintedCloakedPokemon[slot] = 0;
+				battleData.faintedCloakedPokemon[slot]++;
+				if (battleData.faintedCloakedPokemon[slot] === cloakedPokemon.length) {
 					room.say(player.name + " your cloaked Pokemon " + (cloakedPokemon.length > 1 ? "have" : "has") + " fainted!");
 					this.onBattleWin(room, opponent.name);
 					return false;
@@ -1439,14 +1445,16 @@ export abstract class EliminationTournament extends ScriptedGame {
 		const winner = this.players[Tools.toId(username)];
 		if (!players.includes(winner)) return;
 
+		this.checkedBattleRooms.push(room.publicId);
+
+		const battleData = this.battleData.get(room)!;
 		const loser = players[0] === winner ? players[1] : players[0];
-		const loserSlot = this.battleData[room.id].slots.get(loser);
-		if (!loserSlot || !(loserSlot in this.battleData[room.id].pokemon)) {
-			throw new Error(loser.name + " (" + this.battleData[room.id].slots.get(loser) + ") does not have a team in " +
-				room.id);
+		const loserSlot = battleData.slots.get(loser);
+		if (!loserSlot || !(loserSlot in battleData.pokemon)) {
+			throw new Error(loser.name + " (" + battleData.slots.get(loser) + ") does not have a team in " + room.id);
 		}
 
-		const loserTeam = this.battleData[room.id].pokemon[loserSlot];
+		const loserTeam = battleData.pokemon[loserSlot];
 		const node = this.findAvailableMatchNode(winner, loser);
 		if (!node) throw new Error("No available match for " + winner.name + " and " + loser.name);
 
@@ -1463,6 +1471,8 @@ export abstract class EliminationTournament extends ScriptedGame {
 	}
 
 	onBattleExpire(room: Room): void {
+		this.checkedBattleRooms.push(room.publicId);
+
 		const players = this.getPlayersFromBattleData(room);
 		if (players) this.disqualifyPlayers(players);
 	}
@@ -1559,12 +1569,24 @@ const commands: GameCommandDefinitions<EliminationTournament> = {
 	check: {
 		// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 		command(target, room, user) {
-			if (!this.playerOpponents.has(this.players[user.id])) {
-				user.say("You do not have a current opponent.");
+			const player = this.players[user.id];
+			if (player.eliminated) {
+				if (this.disqualifiedPlayers.has(player)) {
+					user.say("You have already been disqualified from the tournament! You must invite " + Users.self.name + " at the " +
+						"of every battle.");
+				} else {
+					user.say("You have already been eliminated from the tournament.");
+				}
 				return false;
 			}
+
 			if (!target) {
 				user.say("You must include the link to the battle.");
+				return false;
+			}
+
+			if (!this.playerOpponents.has(player)) {
+				user.say("You do not have a current opponent.");
 				return false;
 			}
 
@@ -1573,22 +1595,29 @@ const commands: GameCommandDefinitions<EliminationTournament> = {
 				user.say("Please specify a valid battle link.");
 				return false;
 			}
-			if (this.checkedBattleRooms.includes(battle)) {
+
+			if (Rooms.get(battle.fullId)) {
+				user.say(Users.self.name + " is already in the specified battle.");
+				return false;
+			}
+
+			if (this.checkedBattleRooms.includes(battle.publicId)) {
 				user.say("The specified battle has already been checked.");
 				return false;
 			}
 
-			const format = battle.split("-")[1];
-			if (format !== this.battleFormat.id) {
+			if (battle.format !== this.battleFormat.id) {
 				user.say("You must battle in " + this.battleFormat.name + ".");
 				return false;
 			}
 
-			const battleRoom = Rooms.add(battle);
+			const battleRoom = Rooms.add(battle.fullId);
 			battleRoom.game = this;
-			this.say('/join ' + battle);
+
+			this.say('/join ' + battle.fullId);
 			return true;
 		},
+		eliminatedGameCommand: true,
 		pmOnly: true,
 	},
 	starter: {

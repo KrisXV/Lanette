@@ -100,7 +100,8 @@ class Survival {
 const commandDefinitions: GameCommandDefinitions<SurvivalThis> = {
 	guess: {
 		// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-		command(target, room, user): GameCommandReturnType {
+		command(target, room, user, cmd): GameCommandReturnType {
+			if (this.answerCommands && !this.answerCommands.includes(cmd)) return false;
 			if (!this.canGuessAnswer(this.players[user.id])) return false;
 
 			const player = this.players[user.id];
@@ -123,9 +124,9 @@ const commandDefinitions: GameCommandDefinitions<SurvivalThis> = {
 	},
 };
 
-const commands = CommandParser.loadCommands(commandDefinitions);
+const commands = CommandParser.loadCommandDefinitions(commandDefinitions);
 
-const initialize = (game: ScriptedGame): void => {
+const initialize = (game: QuestionAndAnswer): void => {
 	const mode = new Survival();
 	const propertiesToOverride = Object.getOwnPropertyNames(mode)
 		.concat(Object.getOwnPropertyNames(Survival.prototype)) as (keyof Survival)[];
@@ -169,7 +170,8 @@ const tests: GameFileTests<SurvivalThis> = {
 			const currentPlayer = game.currentPlayer;
 			assert(currentPlayer);
 			game.canGuess = true;
-			runCommand(attributes.commands![0], game.answers[0], game.room, currentPlayer.name);
+			runCommand(game.answerCommands ? game.answerCommands[0] : attributes.commands![0], game.answers[0], game.room,
+				currentPlayer.name);
 			assert(!currentPlayer.eliminated);
 			await game.onNextRound();
 			assert(game.currentPlayer !== currentPlayer);
@@ -190,7 +192,7 @@ const tests: GameFileTests<SurvivalThis> = {
 			const currentPlayer = game.currentPlayer;
 			assert(currentPlayer);
 			game.canGuess = true;
-			runCommand(attributes.commands![0], 'mocha', game.room, currentPlayer.name);
+			runCommand(game.answerCommands ? game.answerCommands[0] : attributes.commands![0], 'mocha', game.room, currentPlayer.name);
 			// answers cleared when time runs out
 			game.answers = [];
 			await game.onNextRound();

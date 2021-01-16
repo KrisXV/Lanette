@@ -1,6 +1,8 @@
 import type { Player } from "../room-activity";
 import { ScriptedGame } from "../room-game-scripted";
+import type { Room } from "../rooms";
 import type { GameCommandDefinitions, IGameAchievement, IGameFile } from "../types/games";
+import type { User } from "../users";
 
 type AchievementNames = "hotpotatohero";
 
@@ -20,14 +22,20 @@ class ChanseysEggToss extends ScriptedGame {
 
 	onRenamePlayer(player: Player): void {
 		if (!this.started || player.eliminated) return;
-		this.removePlayer(player.name);
-		const text = player.name + " was DQed for changing names!";
+		const reason = "for changing their username";
 		if (this.currentHolder) {
-			this.say(text + " Moving to the next round.");
-			this.currentHolder = null;
-			return this.nextRound();
+			this.currentHolder = player;
+			this.explodeEgg(reason);
+		} else {
+			this.eliminatePlayer(player, "You cannot change your username!");
+			this.say(player.name + " was DQed " + reason + "!");
 		}
-		this.say(text);
+	}
+
+	onUserLeaveRoom(room: Room, user: User): void {
+		if (!this.started || !this.currentHolder || !(user.id in this.players) || this.players[user.id].eliminated) return;
+		this.currentHolder = this.players[user.id];
+		this.explodeEgg("for leaving the room");
 	}
 
 	onRemovePlayer(player: Player): void {
@@ -46,12 +54,15 @@ class ChanseysEggToss extends ScriptedGame {
 		this.currentHolder = player;
 	}
 
-	explodeEgg(): void {
+	explodeEgg(reason?: string): void {
+		if (this.timeout) clearTimeout(this.timeout);
+
 		if (this.currentHolder) {
-			this.say("The egg exploded on " + this.currentHolder.name + "!");
+			this.say("The egg exploded on **" + this.currentHolder.name + "**" + (reason ? " " + reason : "") + "!");
 			this.eliminatePlayer(this.currentHolder);
 			this.currentHolder = null;
 		}
+
 		if (this.getRemainingPlayerCount() < 2) return this.end();
 		this.timeout = setTimeout(() => this.nextRound(), 5000);
 	}
@@ -61,7 +72,7 @@ class ChanseysEggToss extends ScriptedGame {
 		if (remainingPlayerCount < 2) {
 			return this.end();
 		} else if (remainingPlayerCount <= 4) {
-			this.roundTimes = [5000, 6000, 7000, 8000];
+			// this.roundTimes = [5000, 6000, 7000, 8000];
 		}
 
 		const html = this.getRoundHtml(players => this.getPlayerNames(players));

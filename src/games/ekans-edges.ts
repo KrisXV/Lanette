@@ -95,14 +95,7 @@ class EkansEdges extends QuestionAndAnswer {
 		}
 	}
 
-	onSignups(): void {
-		if (!this.isMiniGame) {
-			if (this.format.options.freejoin) this.timeout = setTimeout(() => this.nextRound(), 5000);
-		}
-	}
-
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const category = (this.roundCategory || this.sampleOne(categories)) as DataKey;
 		let edge = this.sampleOne(dataKeys[category]);
 		while (edge === this.lastEdge) {
@@ -126,7 +119,7 @@ export const game: IGameFile<EkansEdges> = Games.copyTemplateProperties(question
 	mascot: "Ekans",
 	minigameCommand: 'edge',
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess an answer with the given starting and ending letters!",
-	modes: ["survival", "team"],
+	modes: ["multianswer", "survival", "team", "timeattack"],
 	variants: [
 		{
 			name: "Ekans' Ability Edges",

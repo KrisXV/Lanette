@@ -1,3 +1,5 @@
+import type { HexCode } from "./tools";
+
 interface IEventInformation {
 	name: string;
 	link?: {description: string; url: string};
@@ -43,34 +45,69 @@ export interface IUserHostedGameStats {
 	startTime: number;
 }
 
+export interface IGameTrainerCard {
+	avatar: string;
+	pokemon: string[];
+	background?: HexCode;
+	pokemonGifs?: boolean;
+}
+
+export interface IGameHostBox {
+	pokemon: string[];
+	shinyPokemon: boolean[];
+	background?: HexCode;
+	buttons?: HexCode;
+}
+
+export interface IGameScriptedBox {
+	pokemon: string[];
+	background?: HexCode;
+	buttons?: HexCode;
+}
+
 export type UserHostStatus = 'unapproved' | 'novice' | 'approved';
 
-export type LeaderboardType = 'gameLeaderboard' | 'tournamentLeaderboard' | 'unsortedLeaderboard';
+export type LeaderboardType = 'gameLeaderboard' | 'gameHostingLeaderbaord' | 'tournamentLeaderboard' | 'unsortedLeaderboard';
 
-export type Leaderboard = Dict<ILeaderboardEntry>;
+export interface ILeaderboard {
+	entries: Dict<ILeaderboardEntry>;
+	sources: string[];
+	type: LeaderboardType;
+}
+
+export interface ICachedLeaderboardEntry {
+	id: string;
+	points: number;
+}
 
 export interface IDatabase {
 	botGreetings?: Dict<IBotGreeting>;
 	eventInformation?: Dict<IEventInformation>;
 	gameAchievements?: Dict<string[]>;
-	gameCount?: number;
-	gameLeaderboard?: Leaderboard;
+	gameLeaderboard?: ILeaderboard;
+	gameHostingLeaderbaord?: ILeaderboard;
+	gameHostBoxes?: Dict<IGameHostBox>;
+	gameScriptedBoxes?: Dict<IGameScriptedBox>;
+	gameTrainerCards?: Dict<IGameTrainerCard>;
 	lastGameFormatTimes?: Dict<number>;
 	lastGameTime?: number;
 	lastTournamentFormatTimes?: Dict<number>;
 	lastTournamentTime?: number;
 	lastUserHostedGameFormatTimes?: Dict<number>;
 	lastUserHostedGameTime?: number;
+	leaderboardManagers?: string[];
+	miniGameCounts?: Dict<number>;
 	pastGames?: IPastGame[];
 	pastTournaments?: IPastTournament[];
 	pastUserHostedGames?: IPastGame[];
 	previousUserHostedGameStats?: Dict<IUserHostedGameStats[]>;
 	queuedTournament?: {formatid: string; playerCap: number; scheduled: boolean; time: number};
 	roomSampleTeamsLink?: string;
+	scriptedGameCounts?: Dict<number>;
 	thcWinners?: Dict<string>;
-	tournamentLeaderboard?: Leaderboard;
-	unsortedLeaderboard?: Leaderboard;
-	userHostedGameCount?: number;
+	tournamentLeaderboard?: ILeaderboard;
+	unsortedLeaderboard?: ILeaderboard;
+	userHostedGameCounts?: Dict<number>;
 	userHostedGameStats?: Dict<IUserHostedGameStats[]>;
 	userHostedGameQueue?: IQueuedUserHostedGame[];
 	userHostStatuses?: Dict<UserHostStatus>;

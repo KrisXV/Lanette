@@ -9,29 +9,40 @@ import type {
 
 export abstract class QuestionAndAnswer extends ScriptedGame {
 	additionalHintHeader: string = '';
-	answers: string[] = [];
+	allowRepeatCorrectAnswers: boolean = false;
+	answers: readonly string[] = [];
 	answerTimeout: NodeJS.Timer | undefined;
 	beforeNextRoundTime: number = 5 * 1000;
+	cooldownBetweenRounds: number = 0;
 	canGuess: boolean = false;
+	checkScoreCapBeforeRound: boolean = false;
+	correctPlayers: Player[] = [];
 	firstAnswer: Player | false | undefined;
+	guessedAnswers: string[] = [];
 	hint: string = '';
+	hintTimestamp: number = 0;
 	hintUhtmlName: string = '';
-	inactiveRounds: number = 0;
 	inactiveRoundLimit: number = 10;
+	incorrectAnswers: number = 0;
 	lastHintHtml: string = '';
+	maxCorrectPlayersPerRound: number = 1;
+	minimumAnswersPerHint: number = 0;
 	multiRoundHints: boolean = false;
 	readonly points = new Map<Player, number>();
 	previousHint: string = '';
 	questionAndAnswerRound: number = 0;
 	roundTime: number = 10 * 1000;
+	roundAnswersCount: number = 0;
 
 	allAnswersAchievement?: IGameAchievement;
 	allAnswersTeamAchievement?: IGameAchievement;
+	answerCommands?: string[];
+	noIncorrectAnswersMinigameAchievement?: IGameAchievement;
 	roundCategory?: string;
 	readonly roundGuesses?: Map<Player, boolean>;
 	updateHintTime?: number;
 
-	abstract setAnswers(): Promise<void>;
+	abstract generateAnswer(): Promise<void> | void;
 
 	onInitialize(format: IGameFormat): void {
 		super.onInitialize(format);
@@ -75,16 +86,72 @@ export abstract class QuestionAndAnswer extends ScriptedGame {
 			}
 		}
 
-		this.inactiveRounds++;
-		if (this.inactiveRounds === this.inactiveRoundLimit) {
-			this.inactivityEnd();
-			return;
+		if (!this.correctPlayers.length) {
+			this.inactiveRounds++;
+			if (this.inactiveRounds === this.inactiveRoundLimit) {
+				this.inactivityEnd();
+				return;
+			}
 		}
 
 		this.nextRound();
 	}
 
+	async tryGenerateAnswer(): Promise<void> {
+		try {
+			await this.generateAnswer();
+		} catch (e) {
+			console.log(e);
+			Tools.logError(e, this.format.name + " generateAnswer()");
+			this.errorEnd();
+		}
+	}
+
+	async setNextAnswer(): Promise<void> {
+		await this.tryGenerateAnswer();
+		if (this.ended) return;
+
+		while (this.minimumAnswersPerHint && this.answers.length < this.minimumAnswersPerHint) {
+			await this.tryGenerateAnswer();
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+			if (this.ended) return;
+		}
+
+		if (this.roundGuesses) this.roundGuesses.clear();
+		this.guessedAnswers = [];
+		this.correctPlayers = [];
+		this.incorrectAnswers = 0;
+		this.roundAnswersCount = this.answers.length;
+		this.hintTimestamp = 0;
+		this.questionAndAnswerRound++;
+	}
+
+	removeAnswer(answer: string): void {
+		const index = this.answers.indexOf(answer);
+		if (index !== -1) {
+			const answers = this.answers.slice();
+			answers.splice(index, 1);
+			this.answers = answers;
+			this.guessedAnswers.push(answer);
+		}
+	}
+
 	async onNextRound(): Promise<void> {
+		if (this.checkScoreCapBeforeRound) {
+			let reachedCap = false;
+			this.points.forEach((points, player) => {
+				if (points >= this.format.options.points) {
+					this.winners.set(player, points);
+					if (!reachedCap) reachedCap = true;
+				}
+			});
+			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+			if (reachedCap) {
+				this.end();
+				return;
+			}
+		}
+
 		let roundText: boolean | string | undefined;
 		if (this.beforeNextRound) {
 			roundText = this.beforeNextRound();
@@ -98,10 +165,8 @@ export abstract class QuestionAndAnswer extends ScriptedGame {
 			newAnswer = true;
 			if (this.answerTimeout) clearTimeout(this.answerTimeout);
 			this.canGuess = false;
-			await this.setAnswers();
+			await this.setNextAnswer();
 			if (this.ended) return;
-			if (this.roundGuesses) this.roundGuesses.clear();
-			this.questionAndAnswerRound++;
 		}
 
 		if (this.updateHint) {
@@ -110,18 +175,21 @@ export abstract class QuestionAndAnswer extends ScriptedGame {
 		}
 
 		const sayHint = () => {
-			const onHintHtml = () => {
+			const onHintHtml = (timestamp: number) => {
 				if (this.ended) return;
 				if (!this.canGuess) this.canGuess = true;
-				if (newAnswer && this.roundTime) {
-					if (this.answerTimeout) clearTimeout(this.answerTimeout);
-					this.answerTimeout = setTimeout(() => this.onAnswerTimeLimit(), this.roundTime);
+				if (newAnswer) {
+					this.hintTimestamp = timestamp;
+					if (this.roundTime) {
+						if (this.answerTimeout) clearTimeout(this.answerTimeout);
+						this.answerTimeout = setTimeout(() => this.onAnswerTimeLimit(), this.roundTime);
+					}
 				}
 				if (this.onHintHtml) this.onHintHtml();
 			};
 
 			if (!newAnswer && this.previousHint && this.previousHint === this.hint) {
-				onHintHtml();
+				onHintHtml(Date.now());
 			} else {
 				this.hintUhtmlName = this.uhtmlBaseName + '-hint-round' + this.questionAndAnswerRound;
 				const html = this.getHintHtml();
@@ -141,6 +209,8 @@ export abstract class QuestionAndAnswer extends ScriptedGame {
 				this.timeout = setTimeout(() => sayHint(), this.beforeNextRoundTime);
 			});
 			this.say(roundText);
+		} else if (this.cooldownBetweenRounds) {
+			this.timeout = setTimeout(() => sayHint(), this.cooldownBetweenRounds);
 		} else {
 			sayHint();
 		}
@@ -153,12 +223,12 @@ export abstract class QuestionAndAnswer extends ScriptedGame {
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	canGuessAnswer(player: Player): boolean {
-		if (this.ended || !this.canGuess || !this.answers.length) return false;
+		if (this.ended || !this.canGuess || !this.answers.length || this.correctPlayers.includes(player)) return false;
 		return true;
 	}
 
 	guessAnswer(player: Player, guess: string): string | false {
-		if (!Tools.toId(guess) || this.filterGuess && this.filterGuess(guess)) return false;
+		if (!Tools.toId(guess) || (this.filterGuess && this.filterGuess(guess, player))) return false;
 
 		if (this.roundGuesses) {
 			if (this.roundGuesses.has(player)) return false;
@@ -166,17 +236,19 @@ export abstract class QuestionAndAnswer extends ScriptedGame {
 		}
 
 		let answer = this.checkAnswer(guess);
-		if (this.ended || !this.answers.length) return false;
 
 		if (!answer) {
+			this.incorrectAnswers++;
 			if (!this.onIncorrectGuess) return false;
 			answer = this.onIncorrectGuess(player, guess);
 			if (!answer) return false;
 		}
 
-		if (this.answerTimeout) {
-			clearTimeout(this.answerTimeout);
-			delete this.answerTimeout;
+		if (this.maxCorrectPlayersPerRound === 1) {
+			if (this.answerTimeout) {
+				clearTimeout(this.answerTimeout);
+				delete this.answerTimeout;
+			}
 		}
 
 		this.offUhtml(this.hintUhtmlName, this.lastHintHtml);
@@ -185,42 +257,74 @@ export abstract class QuestionAndAnswer extends ScriptedGame {
 		return answer;
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	checkAnswer(guess: string): string {
+	checkAnswer(guess: string, answers?: readonly string[]): string {
 		guess = Tools.toId(guess);
+		if (!answers) answers = this.answers;
 		let match = '';
 		const guessMega = guess.substr(0, 4) === 'mega' ? guess.substr(4) + 'mega' : '';
 		const guessPrimal = guess.substr(0, 6) === 'primal' ? guess.substr(6) + 'primal' : '';
-		for (const answer of this.answers) {
+		for (const answer of answers) {
 			const id = Tools.toId(answer);
 			if (id === guess || (guessMega && id === guessMega) || (guessPrimal && id === guessPrimal)) {
 				match = answer;
 				break;
 			}
 		}
+
 		return match;
 	}
 
+	/** Return an empty string to not display answers */
 	getAnswers(givenAnswer: string, finalAnswer?: boolean): string {
 		return "The" + (finalAnswer ? " final " : "") + " answer" + (this.answers.length > 1 ? "s were" : " was") + " __" +
 			Tools.joinList(this.answers) + "__.";
 	}
 
 	getRandomAnswer(): IRandomGameAnswer {
-		// true async setAnswers() should not have canGetRandomAnswer
-		void this.setAnswers();
+		// formats with async generateAnswer should not have canGetRandomAnswer set to `true`
+		void this.generateAnswer();
 		if (this.updateHint) this.updateHint();
 		return {answers: this.answers, hint: this.hint};
 	}
 
 	getForceEndMessage(): string {
-		if (!this.answers.length) return "";
+		if (!this.answers.length || !this.canGuess) return "";
 		return this.getAnswers("", !this.isMiniGame);
 	}
 
+	onTimeLimit(): boolean {
+		const winners = new Map<Player, number>();
+		let mostPoints = 0;
+		for (const i in this.players) {
+			if (this.players[i].eliminated) continue;
+			const player = this.players[i];
+			const points = this.points.get(player);
+			if (!points) continue;
+			if (points > mostPoints) {
+				winners.clear();
+				winners.set(player, points);
+				mostPoints = points;
+			} else if (points === mostPoints) {
+				winners.set(player, points);
+			}
+		}
+
+		winners.forEach((points, player) => {
+			this.winners.set(player, points);
+		});
+
+		return true;
+	}
+
+	onEnd(): void {
+		if (this.isMiniGame) return;
+		this.convertPointsToBits();
+		this.announceWinners();
+	}
+
 	beforeNextRound?(): boolean | string;
-	filterGuess?(guess: string): boolean;
-	getPointsForAnswer?(answer: string): number;
+	filterGuess?(guess: string, player?: Player): boolean;
+	getPointsForAnswer?(answer: string, timestamp: number): number;
 	onCorrectGuess?(player: Player, guess: string): void;
 	onHintHtml?(): void;
 	onIncorrectGuess?(player: Player, guess: string): string;
@@ -230,11 +334,12 @@ export abstract class QuestionAndAnswer extends ScriptedGame {
 const commands: GameCommandDefinitions<QuestionAndAnswer> = {
 	guess: {
 		// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-		command(target, room, user): GameCommandReturnType {
+		command(target, room, user, cmd, timestamp): GameCommandReturnType {
+			if (this.answerCommands && !this.answerCommands.includes(cmd)) return false;
+
 			const player = this.createPlayer(user) || this.players[user.id];
 			if (!this.canGuessAnswer(player)) return false;
 
-			if (!player.active) player.active = true;
 			const answer = this.guessAnswer(player, target);
 			if (!answer || !this.canGuessAnswer(player)) return false;
 
@@ -243,16 +348,22 @@ const commands: GameCommandDefinitions<QuestionAndAnswer> = {
 			if (this.isMiniGame) {
 				this.say((this.pm ? "You are" : "**" + user.name + "** is") + " correct! " + this.getAnswers(answer));
 				this.addBits(user, Games.minigameBits);
+				if (this.noIncorrectAnswersMinigameAchievement && !this.incorrectAnswers) {
+					this.unlockAchievement(player, this.noIncorrectAnswersMinigameAchievement);
+				}
 				this.end();
 				return true;
 			}
 
 			if (this.onCorrectGuess) this.onCorrectGuess(player, answer);
 
-			const awardedPoints = this.getPointsForAnswer ? this.getPointsForAnswer(answer) : 1;
+			const awardedPoints = this.getPointsForAnswer ? this.getPointsForAnswer(answer, timestamp) : 1;
 			const points = this.addPoints(player, awardedPoints);
 
-			if (this.allAnswersAchievement) {
+			this.correctPlayers.push(player);
+
+			const singleCorrectPlayer = this.maxCorrectPlayersPerRound === 1;
+			if (this.allAnswersAchievement && singleCorrectPlayer) {
 				if (this.firstAnswer === undefined) {
 					this.firstAnswer = player;
 				} else {
@@ -260,36 +371,51 @@ const commands: GameCommandDefinitions<QuestionAndAnswer> = {
 				}
 			}
 
-			if (points >= this.format.options.points) {
-				let text = '**' + player.name + '** wins' + (this.parentGame ? '' : ' the game') + '!';
-				const answers = ' ' + this.getAnswers(answer, true);
-				if (text.length + answers.length <= Tools.maxMessageLength) {
-					text += answers;
-				} else {
-					text += ' A possible answer was __' + answer + '__.';
-				}
-				this.say(text);
-				if (this.allAnswersAchievement && this.firstAnswer === player && !this.parentGame) {
-					this.unlockAchievement(player, this.allAnswersAchievement);
-				}
-				this.winners.set(player, 1);
-				this.convertPointsToBits();
-				this.end();
-				return true;
-			} else {
+			const reachedMaxPoints = points >= this.format.options.points;
+			if (singleCorrectPlayer || (reachedMaxPoints && !this.checkScoreCapBeforeRound)) {
 				if (this.hint) this.off(this.hint);
-				let text = '**' + player.name + '** advances to **' + points + '** point' + (points > 1 ? 's' : '') + '!';
-				const answers = ' ' + this.getAnswers(answer);
-				if (text.length + answers.length <= Tools.maxMessageLength) {
-					text += answers;
-				} else {
-					text += ' A possible answer was __' + answer + '__.';
+				let text = '**' + player.name + '** advances to **' + this.getPointsDisplay(points, reachedMaxPoints ? 0 : undefined) +
+					'** point' + (points > 1 ? 's' : '') + '!';
+				const answers = this.getAnswers(answer);
+				if (answers) {
+					if ((text + " " + answers).length <= Tools.maxMessageLength) {
+						text += " " + answers;
+					} else {
+						text += ' A possible answer was __' + answer + '__.';
+					}
 				}
 				this.say(text);
+
+				if (reachedMaxPoints) {
+					if (this.allAnswersAchievement && this.firstAnswer === player && !this.parentGame) {
+						this.unlockAchievement(player, this.allAnswersAchievement);
+					}
+					this.winners.set(player, points);
+					this.end();
+					return true;
+				} else {
+					this.answers = [];
+					this.timeout = setTimeout(() => this.nextRound(), 5000);
+				}
+			} else {
+				if (this.allowRepeatCorrectAnswers) {
+					if (awardedPoints) {
+						player.say("You are correct! You earned " + this.getPointsDisplay(awardedPoints) + " point" +
+							(awardedPoints > 1 ? "s" : "") + ".");
+					}
+				} else {
+					this.say(player.name + " is the **" + Tools.toNumberOrderString(this.correctPlayers.length) + "** correct player!");
+				}
+
+				if (this.maxCorrectPlayersPerRound !== Infinity && this.correctPlayers.length === this.maxCorrectPlayersPerRound) {
+					this.answers = [];
+				} else {
+					if (!this.allowRepeatCorrectAnswers) this.removeAnswer(answer);
+				}
+
+				if (!this.answers.length) this.timeout = setTimeout(() => this.nextRound(), 5000);
 			}
 
-			this.answers = [];
-			this.timeout = setTimeout(() => this.nextRound(), 5000);
 			return true;
 		},
 		aliases: ['g'],
@@ -312,7 +438,7 @@ const tests: GameFileTests<QuestionAndAnswer> = {
 			await game.onNextRound();
 			assert(game.answers.length);
 			assert(game.hint);
-			const expectedPoints = game.getPointsForAnswer ? game.getPointsForAnswer(game.answers[0]) : 1;
+			const expectedPoints = game.getPointsForAnswer ? game.getPointsForAnswer(game.answers[0], Date.now()) : 1;
 			game.canGuess = true;
 			runCommand('guess', game.answers[0], game.room, name);
 			assert(id in game.players);
@@ -412,7 +538,7 @@ const tests: GameFileTests<QuestionAndAnswer> = {
 				if (game.timeout) clearTimeout(game.timeout);
 				await game.onNextRound();
 				assert(game.answers.length);
-				let expectedPoints = game.getPointsForAnswer ? game.getPointsForAnswer(game.answers[0]) : 1;
+				let expectedPoints = game.getPointsForAnswer ? game.getPointsForAnswer(game.answers[0], Date.now()) : 1;
 				const points = game.points.get(game.players[id]);
 				if (points) expectedPoints += points;
 				game.canGuess = true;

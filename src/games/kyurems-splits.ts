@@ -41,11 +41,13 @@ class KyuremsSplits extends QuestionAndAnswer {
 		return true;
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async setAnswers(): Promise<void> {
+	generateAnswer(): void {
 		const category = (this.roundCategory || this.sampleOne(categories)) as DataKey;
+
+		let answers: string[] = [];
 		let hint = '';
-		while (!this.answers.length || this.answers.length > 15 || Client.willBeFiltered(hint)) {
+		while (!answers.length || answers.length > 15 ||
+			Client.checkFilters(hint, !this.isPm(this.room) ? this.room : undefined)) {
 			const randomAnswer = Tools.toId(this.sampleOne(data[category]));
 			const validIndices: number[] = [];
 			for (let i = 1; i < randomAnswer.length; i++) {
@@ -53,17 +55,21 @@ class KyuremsSplits extends QuestionAndAnswer {
 			}
 			const numberOfLetters = Math.min(4, Math.max(2, Math.floor(validIndices.length * (Math.random() * 0.4 + 0.3))));
 			const chosenIndices = this.sampleMany(validIndices, numberOfLetters);
+
 			hint = '';
 			for (const index of chosenIndices) {
 				hint += randomAnswer[index];
 			}
-			this.answers = [];
+
+			answers = [];
 			for (const answer of data[category]) {
 				if (this.isValid(Tools.toId(answer), hint)) {
-					this.answers.push(answer);
+					answers.push(answer);
 				}
 			}
 		}
+
+		this.answers = answers;
 		this.hint = "<b>" + category + "</b>: <i>" + hint.toUpperCase() + "</i>";
 	}
 }
@@ -81,7 +87,7 @@ export const game: IGameFile<KyuremsSplits> = Games.copyTemplateProperties(quest
 	minigameCommand: 'split',
 	minigameDescription: "Use <code>" + Config.commandCharacter + "g</code> to guess an answer with all of the given letters in that " +
 		"order!",
-	modes: ["survival", "team"],
+	modes: ["survival", "team", "timeattack"],
 	variants: [
 		{
 			name: "Kyurem's Ability Splits",
