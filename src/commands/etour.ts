@@ -82,15 +82,6 @@ export const commands: BaseCommandDefinitions = {
 			}
 			// const tour = db.tourRuleset;
 			// const samples = db.samples!;
-			if (!db.tourcfg) {
-				db.tourcfg = {
-					autodq: {
-						normal: 3,
-						randoms: 2,
-					},
-					autostart: 2,
-				};
-			}
 			const arg0ID = Tools.toId(args[0]);
 			switch (arg0ID) {
 			case 'start':
@@ -462,8 +453,8 @@ export const commands: BaseCommandDefinitions = {
 				db.tourRuleset = [];
 				Storage.exportDatabase(room.id);
 				this.say(tourcmd);
-				if (!format.team && room.id === 'ruinsofalph') {
-					this.say(`!rfaq ${formatid.slice(0, 4)}samples`);
+				if (!format.team && ['ruinsofalph', 'underused'].includes(room.id)) {
+					if (formatid[3] !== '' + Dex.pokemonShowdownDex.gen) this.say(`!rfaq ${formatid.slice(0, 4)}samples`);
 				}
 				/* if (!('id' in format)) {
 					db.tourRuleset = db.tourRuleset.concat(format.remrules).concat(format.addrules).concat(format.bans).concat(format.unbans);

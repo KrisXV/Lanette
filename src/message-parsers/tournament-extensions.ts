@@ -12,6 +12,7 @@ export const parseMessage: IMessageParserFunction = function(room: Room, message
 			messageParts.shift();
 			switch (type) {
 				case 'create': {
+					if (room.id === 'othermetas') return;
 					const msgArguments: ITournamentMessageTypes['create'] = {
 						format: Dex.getExistingFormat(messageParts[0]),
 						generator: messageParts[1],
@@ -67,7 +68,8 @@ export const parseMessage: IMessageParserFunction = function(room: Room, message
 					if (!room.tournament) Tournaments.createTournament(room, messageArguments.json);
 					if (room.tournament) {
 						room.tournament.update(messageArguments.json);
-						if (room.tournament.started && room.tournament.getRemainingPlayerCount() <= 4) {
+						if (room.id === 'ruinsofalph' && room.tournament.started &&
+							room.tournament.getRemainingPlayerCount() <= 5) {
 							room.sayCommand('/tour forcepublic on');
 						}
 					}
@@ -184,6 +186,7 @@ export const parseMessage: IMessageParserFunction = function(room: Room, message
 					break;
 				}
 			}
+			return true;
 		}
 	}
 };
