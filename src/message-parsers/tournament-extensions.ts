@@ -124,6 +124,16 @@ export const parseMessage: IMessageParserFunction = function(room: Room, message
 							}
 						}
 					}
+
+					if (room.id === 'othermetas') {
+						if (!database.recentTours) database.recentTours = [];
+						const format = Dex.getFormat(messageArguments.json.format);
+						database.recentTours.unshift(format ? format.name : messageArguments.json.format);
+						if (database.recentTours.length > 5) {
+							database.recentTours.splice(database.recentTours.length - 1, database.recentTours.length - 5);
+						}
+						Storage.exportDatabase(room.id);
+					}
 					break;
 				}
 

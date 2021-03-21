@@ -147,6 +147,7 @@ export interface IDatabase {
 		};
 	};
 	emojiWhitelist?: string[];
+	recentTours?: string[];
 	lastTour?: number;
 }
 

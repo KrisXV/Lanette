@@ -489,7 +489,7 @@ export const commands: BaseCommandDefinitions = {
 			this.sayHtml("<b>Past tournaments</b>" + (displayTimes ? "" : " (most recent first)") + ": " + Tools.joinList(names) + ".",
 				tournamentRoom);
 		},
-		aliases: ['pasttours', 'recenttournaments', 'recenttours'],
+		aliases: ['pasttours', 'recenttournaments'],
 	},
 	lasttournament: {
 		command(target, room, user) {
