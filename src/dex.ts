@@ -173,7 +173,7 @@ export class Dex {
 	private readonly clientDataDirectory: string;
 	private readonly gen: number;
 	private readonly isBase: boolean;
-	private readonly pokemonShowdownDex: IPokemonShowdownDex;
+	readonly pokemonShowdownDex: IPokemonShowdownDex;
 	private readonly pokemonShowdownValidator: IPokemonShowdownValidator;
 
 	/* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -213,7 +213,6 @@ export class Dex {
 		const pokemonShowdownDexBase = require(path.join(Tools.pokemonShowdownFolder, simDist, "dex.js")).Dex as IPokemonShowdownDex;
 
 		const isBase = mod === 'base';
-		this.dexes = dexes;
 		if (isBase) {
 			dexes['base'] = this;
 			dexes[CURRENT_GEN_STRING] = this;
@@ -1073,11 +1072,11 @@ export class Dex {
 		} else if (name.startsWith('ability:')) {
 			effect = this.getAbility(name.slice(8));
 		} else {
-			if (this.data.moveKeys.includes(id)) {
+			if (this.dataCache && this.dataCache.moveKeys.includes(id)) {
 				effect = this.getMove(id);
-			} else if (this.data.itemKeys.includes(id)) {
+			} else if (this.dataCache && this.dataCache.itemKeys.includes(id)) {
 				effect = this.getItem(id);
-			} else if (this.data.abilityKeys.includes(id)) {
+			} else if (this.dataCache && this.dataCache.abilityKeys.includes(id)) {
 				effect = this.getAbility(id);
 			}
 		}

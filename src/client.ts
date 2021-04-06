@@ -227,7 +227,7 @@ export class Client {
 	private serverId: string = 'showdown';
 	private serverLatency: number = DEFAULT_LATENCY;
 	private serverPingTimeout: NodeJS.Timer | null = null;
-	private serverTimeOffset: number = 0;
+	serverTimeOffset: number = 0;
 	private serverProcessingTimes: KeyedDict<ServerProcessingType, number> = {
 		'chat': DEFAULT_PROCESSING_TIME,
 		'chat-html': DEFAULT_PROCESSING_TIME,
